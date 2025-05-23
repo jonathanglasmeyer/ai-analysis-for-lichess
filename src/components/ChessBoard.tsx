@@ -22,8 +22,10 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
     if (boardContainerRef.current) {
       // Wir nehmen die Container-Breite minus Padding
       const containerWidth = boardContainerRef.current.clientWidth - 32; // 32px für Padding (16px auf jeder Seite)
-      // Maximale Breite begrenzen, damit das Brett nicht zu groß wird
-      const newWidth = Math.min(containerWidth, 560);
+      // Stelle sicher, dass die Breite nicht zu klein wird
+      const minWidth = 640;
+      // Maximale Breite auf 740px begrenzen
+      const newWidth = Math.max(minWidth, Math.min(containerWidth, 740));
       setBoardWidth(newWidth);
     }
   }, []);
@@ -75,7 +77,6 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
     borderRadius: '5px',
     boxShadow: '0 5px 15px rgba(0, 0, 0, 0.07)',
     overflow: 'hidden', // Wichtig, damit die abgerundeten Ecken sichtbar sind
-    margin: '20px auto'
   };
 
   return (

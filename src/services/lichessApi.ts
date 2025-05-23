@@ -39,6 +39,8 @@ export interface LichessGame {
   createdAt: number;
   lastMoveAt: number;
   status: string;
+  winner?: 'white' | 'black' | null;
+  moves?: string[];
   players: {
     white: {
       user: {

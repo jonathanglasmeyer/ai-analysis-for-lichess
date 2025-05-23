@@ -3,7 +3,6 @@ import type { Square } from 'chess.js';
 import { useChessGame } from './hooks/useChessGame';
 import { ChessBoard } from './components/ChessBoard';
 import { MoveList } from './components/MoveList';
-import { PgnImport } from './components/PgnImport';
 import { LichessSidebar } from './components/LichessSidebar';
 import { initAuth } from './services/lichessApi';
 
@@ -27,9 +26,7 @@ function App() {
     makeMove,
     goToMove,
     importPgn,
-    resetGame,
     getPossibleMoves,
-    exportPgn,
   } = useChessGame();
 
   // Handle piece drops on the board
@@ -40,11 +37,7 @@ function App() {
     [makeMove]
   );
 
-  // Copy PGN to clipboard
-  const handleCopyPgn = useCallback(() => {
-    navigator.clipboard.writeText(exportPgn());
-    alert('PGN copied to clipboard!');
-  }, [exportPgn]);
+
 
   // Handler für das Laden einer Lichess-Partie
   const handleLichessGameSelect = useCallback((pgn: string) => {
@@ -67,51 +60,23 @@ function App() {
         
           {/* Chess board section */}
           <div className="flex-1 order-1 lg:order-2 flex flex-col gap-6">
-            {/* Schachbrett */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <div className="p-6 flex justify-center">
-                <ChessBoard
-                  fen={fen}
-                  onPieceDrop={handlePieceDrop}
-                  getPossibleMoves={getPossibleMoves}
-                />
-              </div>
-              <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
-                <button
-                  className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded hover:bg-gray-50 transition-colors font-medium text-sm"
-                  onClick={resetGame}
-                >
-                  Reset Board
-                </button>
-                <button
-                  className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                  onClick={handleCopyPgn}
-                  disabled={history.moves.length === 0}
-                >
-                  Copy PGN
-                </button>
-              </div>
+            <div className="flex justify-center" id="chessboard-container">
+              <ChessBoard
+                fen={fen}
+                onPieceDrop={handlePieceDrop}
+                getPossibleMoves={getPossibleMoves}
+              />
             </div>
           </div>
           
           {/* Move history section */}
           <div className="w-full lg:w-[300px] order-2 lg:order-3 flex flex-col gap-6">
-            {/* PGN Import */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100">
-                <h2 className="text-sm font-medium text-gray-700">PGN Import</h2>
-              </div>
-              <div className="p-5">
-                <PgnImport onImport={importPgn} />
-              </div>
-            </div>
-            
             {/* Zughistorie */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100">
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-[740px]">
+              <div className="px-4 py-2 border-b border-gray-100">
                 <h2 className="text-sm font-medium text-gray-700">Move History</h2>
               </div>
-              <div className="p-5 h-[400px] overflow-auto">
+              <div className="flex-1 overflow-hidden relative">
                 <MoveList history={history} onMoveClick={goToMove} />
               </div>
             </div>

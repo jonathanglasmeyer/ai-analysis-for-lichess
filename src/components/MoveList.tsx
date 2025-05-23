@@ -46,41 +46,58 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
   };
 
   return (
-    <div>
-      <div className="font-bold mb-2 border-b pb-1">Move History</div>
-      {moves.length === 0 ? (
-        <div className="text-gray-500 italic">No moves yet</div>
-      ) : (
-        <div>{renderMoves()}</div>
-      )}
-      <div className="mt-2 flex gap-2">
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-auto">
+        {moves.length === 0 ? (
+          <div className="text-gray-500 italic p-4">No moves yet</div>
+        ) : (
+          <div className="p-3">{renderMoves()}</div>
+        )}
+      </div>
+      
+      {/* Navigation controls fixed at bottom */}
+      <div className="flex justify-center gap-3 text-gray-400 border-t border-gray-100 py-2 bg-white">
         <button 
-          className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 hover:bg-gray-50 rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onMoveClick(-1)}
           disabled={currentMoveIndex === -1}
+          title="First move"
         >
-          Start
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="11 17 6 12 11 7"></polyline>
+            <polyline points="18 17 13 12 18 7"></polyline>
+          </svg>
         </button>
         <button 
-          className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 hover:bg-gray-50 rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onMoveClick(currentMoveIndex - 1)}
           disabled={currentMoveIndex <= -1}
+          title="Previous move"
         >
-          Prev
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
         </button>
         <button 
-          className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 hover:bg-gray-50 rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onMoveClick(currentMoveIndex + 1)}
           disabled={currentMoveIndex >= moves.length - 1}
+          title="Next move"
         >
-          Next
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
         </button>
         <button 
-          className="text-xs px-2 py-1 bg-gray-200 hover:bg-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-1 hover:bg-gray-50 rounded-full disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onMoveClick(moves.length - 1)}
           disabled={currentMoveIndex === moves.length - 1 || moves.length === 0}
+          title="Last move"
         >
-          End
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="13 17 18 12 13 7"></polyline>
+            <polyline points="6 17 11 12 6 7"></polyline>
+          </svg>
         </button>
       </div>
     </div>

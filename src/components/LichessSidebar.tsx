@@ -219,7 +219,7 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
   };
   
   // Hilfsfunktion zur Formatierung des Ergebnisses
-  const getResultText = (status: string, winner?: string) => {
+  const getResultText = (status: string, winner?: 'white' | 'black' | null) => {
     if (status === 'draw') return 'Remis';
     if (status === 'mate' || status === 'resign' || status === 'timeout') {
       if (winner === 'white') return 'Weiß gewinnt';
