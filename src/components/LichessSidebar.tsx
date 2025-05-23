@@ -27,6 +27,7 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGameId, setSelectedGameId] = useState<string>('');
   
   // Ref für den Observer zum infiniten Scrollen
   const observer = useRef<IntersectionObserver | null>(null);
@@ -208,11 +209,39 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
     };
   }, [loading, hasMore, loadMoreGames]);
 
+  // Hilfsfunktion zur formatierung des Spieltyps
+  const formatGameType = (game: LichessGame) => {
+    let type = game.speed || 'Standard';
+    if (game.rated) {
+      return `${type} • Rated`;
+    }
+    return type;
+  };
+  
+  // Hilfsfunktion zur Formatierung des Ergebnisses
+  const getResultText = (status: string, winner?: string) => {
+    if (status === 'draw') return 'Remis';
+    if (status === 'mate' || status === 'resign' || status === 'timeout') {
+      if (winner === 'white') return 'Weiß gewinnt';
+      if (winner === 'black') return 'Schwarz gewinnt';
+    }
+    return status;
+  };
+  
+  // Hilfsfunktion zur Formatierung des Datums
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString('de-DE', {
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
   // Spiel auswählen und PGN an übergeordnete Komponente übergeben
   const handleSelectGame = useCallback(async (game: LichessGame) => {
     try {
       setLoading(true);
       setError(null);
+      setSelectedGameId(game.id); // Markiere das ausgewählte Spiel
       
       // Wenn das PGN bereits vorhanden ist, verwenden wir es direkt
       if (game.pgn) {
@@ -252,45 +281,43 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
   // Login-Ansicht anzeigen, wenn nicht authentifiziert
   if (!authenticated) {
     return (
-      <div className="p-6 h-full flex flex-col justify-center">
-        <div className="text-center mb-8">
-          <h2 className="text-xl font-bold mb-2 text-gray-800">Lichess Verbindung</h2>
-          <p className="text-gray-600">Verbinden Sie Ihr Lichess-Konto, um Ihre Partien zu sehen und zu analysieren.</p>
-        </div>
-        
-        <div className="flex flex-col items-center">
+      <div className="h-full flex flex-col justify-center items-center p-8">
+        <div className="text-center mb-6">
+          <h2 className="text-base font-medium text-gray-800 mb-3">Lichess Games</h2>
+          <p className="text-gray-500 text-sm mb-6">Verbinden Sie Ihr Lichess-Konto, um Ihre Partien zu sehen und zu analysieren.</p>
+          
           <button
             onClick={handleLogin}
-            className="w-full max-w-xs text-center px-4 py-3 bg-[#4D4D4D] text-white rounded-md hover:bg-[#3D3D3D] transition-colors duration-200 flex items-center justify-center gap-2 shadow-md"
+            className="w-full max-w-xs text-center px-4 py-2.5 bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors duration-200 flex items-center justify-center gap-2 text-sm"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
               <polyline points="10 17 15 12 10 7"/>
               <line x1="15" y1="12" x2="3" y2="12"/>
             </svg>
             Mit Lichess verbinden
           </button>
-          
-          {error && (
-            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm w-full max-w-xs">
-              {error}
-            </div>
-          )}
         </div>
+        
+        {error && (
+          <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded text-red-600 text-xs w-full max-w-xs">
+            {error}
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="h-full overflow-auto">
-      <div className="flex justify-between items-center px-4 py-3 sticky top-0 bg-white z-10 border-b">
-        <h2 className="text-xl font-bold text-gray-800">Lichess Partien</h2>
+      <div className="flex justify-between items-center px-5 py-3 sticky top-0 bg-white z-10 border-b border-gray-100">
+        <h2 className="text-base font-medium text-gray-800">Lichess Partien</h2>
         {user && (
-          <div className="flex items-center bg-gray-100 rounded-full py-1 px-3 shadow-sm">
-            <span className="text-sm font-medium mr-2">{user.username}</span>
+          <div className="flex items-center text-gray-700">
+            <span className="text-sm mr-2">{user.username}</span>
             <button
               onClick={handleLogout}
-              className="text-xs px-2 py-1 bg-white rounded-full hover:bg-gray-200 transition-colors duration-200 shadow-sm"
+              className="text-xs p-1.5 text-gray-500 rounded hover:bg-gray-100 transition-colors"
               aria-label="Abmelden"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -304,14 +331,14 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-4 rounded-md">
-          <p className="text-red-700 text-sm">{error}</p>
+        <div className="px-5 py-2 border-l-2 border-red-400 bg-red-50 text-red-600 text-xs mt-2">
+          {error}
         </div>
       )}
       
       {games.length === 0 && !loading ? (
-        <div className="flex flex-col items-center justify-center px-4 py-8 text-gray-500">
-          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 text-gray-300">
+        <div className="flex flex-col items-center justify-center p-10 text-gray-400">
+          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-3 text-gray-300">
             <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
             <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
             <path d="M12 11h4"/>
@@ -319,60 +346,51 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
             <path d="M8 11h.01"/>
             <path d="M8 16h.01"/>
           </svg>
-          <p>Keine Partien gefunden</p>
+          <p className="text-sm">Keine Partien gefunden</p>
         </div>
       ) : (
-        <div className="px-4 py-3 space-y-2">
+        <div className="py-2 space-y-1 px-3">
           {games.map((game, index) => (
             <div
               key={game.id}
               ref={index === games.length - 1 ? lastGameElementRef : null}
-              className="p-2.5 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 transition-colors duration-150 shadow-sm mb-2"
+              className={`p-3 rounded cursor-pointer border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all duration-150 ${selectedGameId === game.id ? 'bg-blue-50 border-blue-100' : ''}`}
               onClick={() => handleSelectGame(game)}
             >
-              <div className="flex justify-between items-center mb-1">
+              <div className="flex justify-between items-start mb-2">
                 {/* Spielerinformationen */}
                 <div className="flex-1">
                   <div className="flex items-center">
-                    <span className="inline-block w-2.5 h-2.5 bg-white border border-gray-300 mr-1.5 rounded-sm"></span>
-                    <span className="font-medium text-sm">{game.players?.white?.user?.name || 'Weiß'}</span>
+                    <span className="inline-block w-2 h-2 bg-white border border-gray-300 mr-1.5 rounded-sm"></span>
+                    <span className="text-sm text-gray-800">{game.players?.white?.user?.name || 'Weiß'}</span>
                     {game.players?.white?.rating && (
-                      <span className="ml-1 text-gray-500 text-xs">{game.players.white.rating}</span>
+                      <span className="ml-1 text-gray-400 text-xs">{game.players.white.rating}</span>
                     )}
                   </div>
-                  <div className="flex items-center mt-1">
-                    <span className="inline-block w-2.5 h-2.5 bg-gray-800 border border-gray-300 mr-1.5 rounded-sm"></span>
-                    <span className="font-medium text-sm">{game.players?.black?.user?.name || 'Schwarz'}</span>
+                  <div className="flex items-center mt-1.5">
+                    <span className="inline-block w-2 h-2 bg-gray-800 border border-gray-300 mr-1.5 rounded-sm"></span>
+                    <span className="text-sm text-gray-800">{game.players?.black?.user?.name || 'Schwarz'}</span>
                     {game.players?.black?.rating && (
-                      <span className="ml-1 text-gray-500 text-xs">{game.players.black.rating}</span>
+                      <span className="ml-1 text-gray-400 text-xs">{game.players.black.rating}</span>
                     )}
                   </div>
                 </div>
                 
                 {/* Badge und Datum */}
-                <div className="flex flex-col items-end">
-                  <div className="flex items-center gap-1 mb-1">
-                    <span className="text-xs font-medium bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full">
-                      {game.speed || 'Standard'}
-                    </span>
-                    {game.rated && (
-                      <span className="text-xs font-medium bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">
-                        R
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(game.createdAt).toLocaleDateString()}
+                <div>
+                  <div className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 inline-block">
+                    {formatGameType(game)}
                   </div>
                 </div>
               </div>
               
-              {/* Status-Leiste */}
-              <div className="flex justify-between items-center text-xs text-gray-600 border-t border-gray-100 pt-1.5 mt-1.5">
-                <span className={`flex items-center ${game.status === 'mate' ? 'text-red-600' : game.status === 'draw' ? 'text-gray-500' : 'text-green-600'}`}>
-                  <span className="inline-block w-2 h-2 rounded-full mr-1.5 bg-current"></span>
-                  {game.status === 'mate' ? 'Matt' : game.status === 'draw' ? 'Remis' : 'Beendet'}
-                </span>
+              {/* Ergebnis und Anzahl der Züge */}
+              <div className="mt-1 text-xs flex justify-between items-center">
+                <div className="text-gray-500">
+                  {getResultText(game.status, game.winner)} • 
+                  {game.moves?.length ? `${Math.ceil(game.moves.length / 2)} Züge` : 'Keine Züge'}
+                </div>
+                <span className="text-gray-400">{formatDate(game.createdAt)}</span>
               </div>
             </div>
           ))}
