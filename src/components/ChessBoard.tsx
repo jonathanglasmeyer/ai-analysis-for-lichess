@@ -5,11 +5,11 @@ import type { Square } from 'chess.js';
 interface ChessBoardProps {
   fen: string;
   onPieceDrop: (sourceSquare: Square, targetSquare: Square) => boolean;
-  getPossibleMoves: (square: Square) => string[];
+  getPossibleMoves: (square: Square) => Square[];
 }
 
 /**
- * ChessBoard component handling visualization and piece movement
+ * ChessBoard component that handles the interactive chess board
  * Uses react-chessboard for rendering and handles drag-and-drop interaction
  */
 export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardProps) {
@@ -41,6 +41,7 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
 
   return (
     <div className="w-full max-w-md mx-auto">
+     
       <Chessboard
         id="chess-analysis-board"
         position={fen}
@@ -51,6 +52,7 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
         boardWidth={560}
         areArrowsAllowed={true}
         boardOrientation="white"
+        animationDuration={200}
       />
     </div>
   );
