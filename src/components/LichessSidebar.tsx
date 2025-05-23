@@ -252,69 +252,139 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
   // Login-Ansicht anzeigen, wenn nicht authentifiziert
   if (!authenticated) {
     return (
-      <div className="border rounded p-4 bg-white h-full">
-        <h2 className="text-lg font-bold mb-4">Lichess Verbindung</h2>
-        <p className="mb-4">Verbinden Sie Ihr Lichess-Konto, um Ihre Partien zu sehen und zu analysieren.</p>
-        <button
-          onClick={handleLogin}
-          className="w-full text-center px-4 py-2 bg-[#80808F] text-white rounded hover:bg-[#5D5D6D] transition"
-        >
-          Mit Lichess verbinden
-        </button>
-        {error && <p className="mt-2 text-red-500 text-sm">{error}</p>}
+      <div className="p-6 h-full flex flex-col justify-center">
+        <div className="text-center mb-8">
+          <h2 className="text-xl font-bold mb-2 text-gray-800">Lichess Verbindung</h2>
+          <p className="text-gray-600">Verbinden Sie Ihr Lichess-Konto, um Ihre Partien zu sehen und zu analysieren.</p>
+        </div>
+        
+        <div className="flex flex-col items-center">
+          <button
+            onClick={handleLogin}
+            className="w-full max-w-xs text-center px-4 py-3 bg-[#4D4D4D] text-white rounded-md hover:bg-[#3D3D3D] transition-colors duration-200 flex items-center justify-center gap-2 shadow-md"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+              <polyline points="10 17 15 12 10 7"/>
+              <line x1="15" y1="12" x2="3" y2="12"/>
+            </svg>
+            Mit Lichess verbinden
+          </button>
+          
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm w-full max-w-xs">
+              {error}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="border rounded p-4 bg-white h-full overflow-auto">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-lg font-bold">Lichess Partien</h2>
+    <div className="h-full overflow-auto">
+      <div className="flex justify-between items-center px-4 py-3 sticky top-0 bg-white z-10 border-b">
+        <h2 className="text-xl font-bold text-gray-800">Lichess Partien</h2>
         {user && (
-          <div className="flex items-center">
-            <span className="mr-2">{user.username}</span>
+          <div className="flex items-center bg-gray-100 rounded-full py-1 px-3 shadow-sm">
+            <span className="text-sm font-medium mr-2">{user.username}</span>
             <button
               onClick={handleLogout}
-              className="text-xs px-2 py-1 bg-gray-200 rounded hover:bg-gray-300"
+              className="text-xs px-2 py-1 bg-white rounded-full hover:bg-gray-200 transition-colors duration-200 shadow-sm"
+              aria-label="Abmelden"
             >
-              Abmelden
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
             </button>
           </div>
         )}
       </div>
 
       {error && (
-        <div className="text-red-500 py-2 mb-2">{error}</div>
+        <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-4 rounded-md">
+          <p className="text-red-700 text-sm">{error}</p>
+        </div>
       )}
       
       {games.length === 0 && !loading ? (
-        <div className="text-gray-500 py-2">Keine Partien gefunden</div>
+        <div className="flex flex-col items-center justify-center px-4 py-8 text-gray-500">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="mb-4 text-gray-300">
+            <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+            <path d="M12 11h4"/>
+            <path d="M12 16h4"/>
+            <path d="M8 11h.01"/>
+            <path d="M8 16h.01"/>
+          </svg>
+          <p>Keine Partien gefunden</p>
+        </div>
       ) : (
-        <div className="space-y-2">
+        <div className="px-4 py-3 space-y-2">
           {games.map((game, index) => (
             <div
               key={game.id}
               ref={index === games.length - 1 ? lastGameElementRef : null}
-              className="p-2 border rounded cursor-pointer hover:bg-gray-100"
+              className="p-2.5 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50 transition-colors duration-150 shadow-sm mb-2"
               onClick={() => handleSelectGame(game)}
             >
-              <div className="font-medium">
-                {game.players?.white?.user?.name || 'Weiß'} vs {game.players?.black?.user?.name || 'Schwarz'}
+              <div className="flex justify-between items-center mb-1">
+                {/* Spielerinformationen */}
+                <div className="flex-1">
+                  <div className="flex items-center">
+                    <span className="inline-block w-2.5 h-2.5 bg-white border border-gray-300 mr-1.5 rounded-sm"></span>
+                    <span className="font-medium text-sm">{game.players?.white?.user?.name || 'Weiß'}</span>
+                    {game.players?.white?.rating && (
+                      <span className="ml-1 text-gray-500 text-xs">{game.players.white.rating}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center mt-1">
+                    <span className="inline-block w-2.5 h-2.5 bg-gray-800 border border-gray-300 mr-1.5 rounded-sm"></span>
+                    <span className="font-medium text-sm">{game.players?.black?.user?.name || 'Schwarz'}</span>
+                    {game.players?.black?.rating && (
+                      <span className="ml-1 text-gray-500 text-xs">{game.players.black.rating}</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Badge und Datum */}
+                <div className="flex flex-col items-end">
+                  <div className="flex items-center gap-1 mb-1">
+                    <span className="text-xs font-medium bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full">
+                      {game.speed || 'Standard'}
+                    </span>
+                    {game.rated && (
+                      <span className="text-xs font-medium bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded-full">
+                        R
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(game.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
               </div>
-              <div className="text-sm text-gray-600">
-                {new Date(game.createdAt).toLocaleDateString()} • {game.speed || 'Standard'} • {game.status || 'Beendet'}
+              
+              {/* Status-Leiste */}
+              <div className="flex justify-between items-center text-xs text-gray-600 border-t border-gray-100 pt-1.5 mt-1.5">
+                <span className={`flex items-center ${game.status === 'mate' ? 'text-red-600' : game.status === 'draw' ? 'text-gray-500' : 'text-green-600'}`}>
+                  <span className="inline-block w-2 h-2 rounded-full mr-1.5 bg-current"></span>
+                  {game.status === 'mate' ? 'Matt' : game.status === 'draw' ? 'Remis' : 'Beendet'}
+                </span>
               </div>
             </div>
           ))}
-          
-          {loading && (
-            <div className="text-center py-2 mt-2">
-              <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-900 mr-2"></div>
-              Lädt weitere Partien...
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+        
+        {loading && (
+          <div className="text-center py-2 mt-2">
+            <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-900 mr-2"></div>
+            Lädt weitere Partien...
+          </div>
+        )}
+      </div>
+    )}
+  </div>
   );
 }

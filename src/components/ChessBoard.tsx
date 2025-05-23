@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { Chessboard } from 'react-chessboard';
 import type { Square } from 'chess.js';
 
@@ -14,6 +14,37 @@ interface ChessBoardProps {
  */
 export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardProps) {
   const [highlightedSquares, setHighlightedSquares] = useState<Record<string, Record<string, string>>>({});
+  const [boardWidth, setBoardWidth] = useState<number>(560); // Default-Wert
+  const boardContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Berechne die Breite des Schachbretts basierend auf dem Container
+  const calculateBoardWidth = useCallback(() => {
+    if (boardContainerRef.current) {
+      // Wir nehmen die Container-Breite minus Padding
+      const containerWidth = boardContainerRef.current.clientWidth - 32; // 32px für Padding (16px auf jeder Seite)
+      // Maximale Breite begrenzen, damit das Brett nicht zu groß wird
+      const newWidth = Math.min(containerWidth, 560);
+      setBoardWidth(newWidth);
+    }
+  }, []);
+  
+  // Initialisiere und passe die Breite bei Resize an
+  useEffect(() => {
+    // Berechne die Breite beim ersten Rendern
+    calculateBoardWidth();
+    
+    // Event-Listener für Fenstergrößenänderungen
+    const handleResize = () => {
+      calculateBoardWidth();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [calculateBoardWidth]);
 
   // Handle when a piece is dragged over a square
   const onDragStart = useCallback((piece: string, square: Square) => {
@@ -43,11 +74,12 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
   const customBoardStyle = {
     borderRadius: '5px',
     boxShadow: '0 5px 15px rgba(0, 0, 0, 0.07)',
-    overflow: 'hidden' // Wichtig, damit die abgerundeten Ecken sichtbar sind
+    overflow: 'hidden', // Wichtig, damit die abgerundeten Ecken sichtbar sind
+    margin: '20px auto'
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full flex justify-center items-center" ref={boardContainerRef}>
       <Chessboard
         id="chess-analysis-board"
         position={fen}
@@ -55,7 +87,7 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
         onPieceDragBegin={onDragStart}
         onPieceDragEnd={onDragEnd}
         customSquareStyles={highlightedSquares}
-        boardWidth={760}
+        boardWidth={boardWidth}
         areArrowsAllowed={true}
         boardOrientation="white"
         animationDuration={200}

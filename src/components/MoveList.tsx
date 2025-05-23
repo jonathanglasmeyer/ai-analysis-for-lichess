@@ -46,7 +46,7 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
   };
 
   return (
-    <div className="border rounded p-2 h-96 overflow-y-auto bg-white">
+    <div>
       <div className="font-bold mb-2 border-b pb-1">Move History</div>
       {moves.length === 0 ? (
         <div className="text-gray-500 italic">No moves yet</div>
