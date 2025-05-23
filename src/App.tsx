@@ -1,9 +1,11 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import type { Square } from 'chess.js';
 import { useChessGame } from './hooks/useChessGame';
 import { ChessBoard } from './components/ChessBoard';
 import { MoveList } from './components/MoveList';
 import { PgnImport } from './components/PgnImport';
+import { LichessSidebar } from './components/LichessSidebar';
+import { initAuth } from './services/lichessApi';
 
 /**
  * Chess Analysis UI
@@ -11,6 +13,14 @@ import { PgnImport } from './components/PgnImport';
  * Inspired by lichess.org analysis view
  */
 function App() {
+  // Initialisiere Lichess-Authentifizierung beim App-Start
+  useEffect(() => {
+    // Initialisiere die Authentifizierung und prüfe, ob der Benutzer von der Auth-Seite zurückgeleitet wurde
+    initAuth().catch(error => {
+      console.error('Fehler bei der Authentifizierung:', error);
+    });
+  }, []);
+
   const {
     fen,
     history,
@@ -36,15 +46,25 @@ function App() {
     alert('PGN copied to clipboard!');
   }, [exportPgn]);
 
+  // Handler für das Laden einer Lichess-Partie
+  const handleLichessGameSelect = useCallback((pgn: string) => {
+    importPgn(pgn);
+  }, [importPgn]);
+
   return (
     <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4">
         <h1 className="text-2xl font-bold mb-6 text-gray-800">Chess Analysis</h1>
         
         <div className="flex flex-col lg:flex-row gap-6">
+          
+          {/* Lichess Seitenleiste */}
+          <div className="w-full lg:w-64 order-3 lg:order-1">
+            <LichessSidebar onSelectGame={handleLichessGameSelect} />
+          </div>
         
           {/* Chess board section */}
-          <div className="flex-1">
+          <div className="flex-1 order-1 lg:order-2">
             <ChessBoard
               fen={fen}
               onPieceDrop={handlePieceDrop}
@@ -69,7 +89,7 @@ function App() {
           </div>
           
           {/* Move history section */}
-          <div className="w-full lg:w-64">
+          <div className="w-full lg:w-64 order-2 lg:order-3">
             <div className="mb-4">
               <PgnImport onImport={importPgn} />
             </div>

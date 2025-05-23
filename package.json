@@ -11,6 +11,8 @@
     "tailwind:watch": "tailwindcss -i ./src/index.css -o ./src/tailwind.css --watch"
   },
   "dependencies": {
+    "@bity/oauth2-auth-code-pkce": "^2.13.0",
+    "axios": "^1.9.0",
     "chess.js": "^1.2.0",
     "react": "^19.1.0",
     "react-chessboard": "^4.7.3",
