@@ -39,9 +39,15 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
     setHighlightedSquares({});
   }, []);
 
+  // Definiere den benutzerdefinierten Board-Style mit abgerundeten Ecken
+  const customBoardStyle = {
+    borderRadius: '5px',
+    boxShadow: '0 5px 15px rgba(0, 0, 0, 0.07)',
+    overflow: 'hidden' // Wichtig, damit die abgerundeten Ecken sichtbar sind
+  };
+
   return (
     <div className="w-full max-w-md mx-auto">
-     
       <Chessboard
         id="chess-analysis-board"
         position={fen}
@@ -49,10 +55,11 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
         onPieceDragBegin={onDragStart}
         onPieceDragEnd={onDragEnd}
         customSquareStyles={highlightedSquares}
-        boardWidth={560}
+        boardWidth={760}
         areArrowsAllowed={true}
         boardOrientation="white"
         animationDuration={200}
+        customBoardStyle={customBoardStyle}
       />
     </div>
   );
