@@ -134,6 +134,48 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
     }
   }, [authenticated]);
   
+  // Funktion zum Laden weiterer Spiele
+  const loadMoreGames = useCallback(async () => {
+    if (loading || !user || !hasMore) return;
+    
+    try {
+      setLoading(true);
+      console.log('Lade weitere Spiele mit zeitbasierter Paginierung');
+      
+      // Übergebe das aktuelle Spiele-Array anstelle eines Zählers
+      // Die Funktion verwendet nun das älteste Spiel für die zeitbasierte Paginierung
+      const moreGames = await fetchMoreGames(user.username, games, 50);
+      console.log('Erhaltene Spiele:', moreGames.length);
+      
+      if (moreGames.length === 0) {
+        console.log('Keine weiteren Spiele gefunden');
+        setHasMore(false);
+      } else {
+        // Prüfe auf doppelte IDs, bevor wir die neuen Spiele hinzufügen
+        const existingIds = new Set(games.map(game => game.id));
+        const uniqueNewGames = moreGames.filter(game => !existingIds.has(game.id));
+        
+        console.log('Eindeutige neue Spiele:', uniqueNewGames.length);
+        
+        if (uniqueNewGames.length === 0) {
+          console.log('Keine eindeutigen neuen Spiele gefunden');
+          setHasMore(false);
+        } else {
+          setGames(prevGames => [...prevGames, ...uniqueNewGames]);
+          
+          // Prüfen, ob es wahrscheinlich weitere Spiele gibt
+          // Wenn wir weniger als die angeforderte Batch-Größe erhalten haben, gibt es wahrscheinlich keine weiteren
+          setHasMore(moreGames.length >= 30);
+        }
+      }
+    } catch (err) {
+      console.error('Fehler beim Laden weiterer Spiele:', err);
+      setError('Fehler beim Laden weiterer Spiele');
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, user, games, hasMore]);
+  
   // Intersection Observer für infinites Scrollen
   useEffect(() => {
     if (loading) return;
@@ -146,13 +188,17 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
     // Neuen Observer erstellen
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore && !loading) {
+        console.log('Letztes Element sichtbar, lade weitere Spiele...');
         loadMoreGames();
       }
     });
 
     // Letztes Spielelement beobachten, wenn vorhanden
     if (lastGameElementRef.current) {
+      console.log('Beobachte letztes Spielelement');
       observer.current.observe(lastGameElementRef.current);
+    } else {
+      console.log('Kein letztes Spielelement gefunden');
     }
     
     return () => {
@@ -160,31 +206,7 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
         observer.current.disconnect();
       }
     };
-  }, [loading, hasMore, games]);
-  
-  // Funktion zum Laden weiterer Spiele
-  const loadMoreGames = async () => {
-    if (!user || loading || !hasMore) return;
-    
-    try {
-      setLoading(true);
-      const moreGames = await fetchMoreGames(user.username, games.length);
-      
-      if (moreGames.length === 0) {
-        setHasMore(false);
-      } else {
-        setGames(prev => [...prev, ...moreGames]);
-        setHasMore(moreGames.length === 30);
-      }
-    } catch (err) {
-      console.error('Fehler beim Laden weiterer Spiele:', err);
-      setError('Fehler beim Laden weiterer Spiele');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Axios ist bereits importiert
+  }, [loading, hasMore, loadMoreGames]);
 
   // Spiel auswählen und PGN an übergeordnete Komponente übergeben
   const handleSelectGame = useCallback(async (game: LichessGame) => {

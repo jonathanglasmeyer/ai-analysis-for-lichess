@@ -375,14 +375,12 @@ export const fetchUserGames = async (
     withAnalysis?: boolean,
     ongoing?: boolean,
     finished?: boolean,
-    offset?: number,
   } = {}
 ): Promise<LichessGame[]> => {
   try {
     // Default Parameter setzen
     const params = new URLSearchParams({
       pgnInJson: 'true', // PGN im JSON-Format erhalten
-      max: String(options.max || 30), // Standardmäßig 30 Spiele laden
       ...Object.fromEntries(
         Object.entries(options)
           .filter(([_, value]) => value !== undefined)
@@ -390,8 +388,15 @@ export const fetchUserGames = async (
       )
     });
 
+    // Wenn max nicht definiert ist, setzen wir einen hohen Wert, um mehr Spiele zu laden
+    if (!options.max) {
+      params.set('max', '100'); // Erhöhen auf 100 für effizienteres Laden
+    }
+
     // URL mit Parametern erstellen
     const url = `${LICHESS_API_URL}/games/user/${username}?${params.toString()}`;
+    
+    console.log(`Lade Spiele von ${url}`);
     
     // Authentifizierte Fetch-Funktion verwenden
     const authFetch = await getAuthenticatedFetch();
@@ -415,6 +420,7 @@ export const fetchUserGames = async (
       .filter((line: string) => line.trim() !== '')
       .map((line: string) => JSON.parse(line));
 
+    console.log(`${games.length} Spiele geladen`);
     return games;
   } catch (error) {
     console.error('Fehler beim Abrufen der Spiele:', error);
@@ -422,16 +428,42 @@ export const fetchUserGames = async (
   }
 };
 
-// Funktion zum inkrementellen Laden mit Offset
+// Funktion zum inkrementellen Laden mit zeitbasierter Paginierung
 export const fetchMoreGames = async (
   username: string,
-  currentCount: number,
-  batchSize: number = 30,
+  currentGames: LichessGame[],
+  batchSize: number = 50,
   additionalOptions: Record<string, any> = {}
 ): Promise<LichessGame[]> => {
+  // Wenn keine aktuellen Spiele vorhanden sind, lade die ersten Spiele
+  if (!currentGames || currentGames.length === 0) {
+    return fetchUserGames(username, {
+      max: batchSize,
+      ...additionalOptions
+    });
+  }
+
+  // Finde das Datum des ältesten Spiels in der aktuellen Liste
+  // Lichess sortiert Spiele nach Datum absteigend (neueste zuerst)
+  const oldestGame = currentGames[currentGames.length - 1];
+  
+  if (!oldestGame || !oldestGame.createdAt) {
+    console.warn('Konnte kein gültiges ältestes Spiel finden, lade ohne until-Parameter');
+    return fetchUserGames(username, {
+      max: batchSize,
+      ...additionalOptions
+    });
+  }
+  
+  // Verwende das Datum des ältesten Spiels als 'until'-Parameter
+  // Subtrahiere 1 Millisekunde, um das älteste Spiel auszuschließen
+  const untilTimestamp = oldestGame.createdAt - 1;
+  
+  console.log(`Lade Spiele vor ${new Date(untilTimestamp).toISOString()}`);
+  
   return fetchUserGames(username, {
     max: batchSize,
-    offset: currentCount,
+    until: untilTimestamp,
     ...additionalOptions
   });
 };
