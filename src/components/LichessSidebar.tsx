@@ -377,11 +377,7 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
                 </div>
                 
                 {/* Badge und Datum */}
-                <div>
-                  <div className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 inline-block">
-                    {formatGameType(game)}
-                  </div>
-                </div>
+               
               </div>
               
               {/* Ergebnis und Anzahl der Züge */}
