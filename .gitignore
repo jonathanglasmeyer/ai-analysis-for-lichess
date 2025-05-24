@@ -22,6 +22,9 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Analysis cache
+server/cache/
+
 # Environment variables
 .env
 .env.local

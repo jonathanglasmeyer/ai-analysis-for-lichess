@@ -2,6 +2,9 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { env } from "bun";
 import Anthropic from '@anthropic-ai/sdk';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as crypto from 'node:crypto';
 
 // Types
 interface AnalyzeRequest {
@@ -11,6 +14,58 @@ interface AnalyzeRequest {
 interface AnalyzeResponse {
   ok: boolean;
   summary: string;
+  cached?: boolean; // Zeigt an, ob die Antwort aus dem Cache kam
+}
+
+// Cache für PGN-Analysen
+interface CacheEntry {
+  timestamp: number;
+  response: AnalyzeResponse;
+}
+
+// Konfiguration für den Filesystem-Cache
+const CACHE_DIR = path.join(process.cwd(), 'cache');
+const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 Tage in Millisekunden
+
+// Initialisiere den Cache-Ordner
+async function initializeCache() {
+  try {
+    await fs.mkdir(CACHE_DIR, { recursive: true });
+    console.log(`Cache directory initialized at ${CACHE_DIR}`);
+  } catch (error) {
+    console.error('Failed to initialize cache directory:', error);
+  }
+}
+
+// Generiere einen Hash für das PGN als Dateinamen
+function getCacheFilename(pgn: string): string {
+  const hash = crypto.createHash('md5').update(pgn).digest('hex');
+  return path.join(CACHE_DIR, `${hash}.json`);
+}
+
+// Lade einen Cache-Eintrag
+async function loadFromCache(pgn: string): Promise<CacheEntry | null> {
+  const cacheFile = getCacheFilename(pgn);
+  
+  try {
+    const data = await fs.readFile(cacheFile, 'utf-8');
+    return JSON.parse(data) as CacheEntry;
+  } catch (error) {
+    // Datei existiert nicht oder kann nicht gelesen werden
+    return null;
+  }
+}
+
+// Speichere einen Eintrag im Cache
+async function saveToCache(pgn: string, entry: CacheEntry): Promise<void> {
+  const cacheFile = getCacheFilename(pgn);
+  
+  try {
+    await fs.writeFile(cacheFile, JSON.stringify(entry, null, 2), 'utf-8');
+    console.log(`Saved analysis to cache: ${cacheFile}`);
+  } catch (error) {
+    console.error('Failed to save to cache:', error);
+  }
 }
 
 // Load environment variables
@@ -35,6 +90,9 @@ const ALLOWED_ORIGINS = [
 ];
 
 const app = new Hono();
+
+// Initialisiere den Cache-Ordner beim Serverstart
+initializeCache();
 
 // CORS middleware
 app.use('*', cors({
@@ -70,17 +128,47 @@ app.post('/analyze', async (c) => {
       return c.json({ ok: false, error: 'Missing PGN data' }, 400);
     }
     
-    // Nutze die Anthropic API für die Schachanalyse
+    // Normalisiere das PGN (entferne Whitespace), um bessere Cache-Treffer zu erzielen
+    const normalizedPgn = body.pgn.trim();
+    
+    // Erstelle einen Hash-Schlüssel für das PGN
+    const cacheKey = normalizedPgn;
+    
+    // Prüfe, ob die Analyse bereits im Cache ist
+    const cachedEntry = await loadFromCache(normalizedPgn);
+    
+    if (cachedEntry) {
+      // Prüfe, ob der Cache-Eintrag noch gültig ist
+      const now = Date.now();
+      
+      if (now - cachedEntry.timestamp < CACHE_EXPIRY) {
+        console.log('Cache hit for PGN analysis');
+        
+        // Gib die gecachte Antwort zurück, mit einem Flag, dass es aus dem Cache kommt
+        return c.json({
+          ...cachedEntry.response,
+          cached: true
+        });
+      } else {
+        // Cache-Eintrag ist abgelaufen
+        console.log('Cache expired for PGN analysis');
+        // Keine Notwendigkeit zu löschen, wird überschrieben
+      }
+    }
+    
+    // Cache-Miss: Nutze die Anthropic API für die Schachanalyse
     try {
+      console.log('Cache miss, calling Anthropic API');
+      
       const prompt = `Du bist ein Schachexperte. Bitte analysiere die folgende Partie und gib die Antwort im **JSON-Format** zurück – mit zwei Abschnitten:
 
-1. \`summary\`: Eine kurze Gesamteinschätzung (2–4 Absätze), in der du erklärst:
+1. "summary": Eine kurze Gesamteinschätzung (2–4 Absätze), in der du erklärst:
    - Wer wann die Initiative hatte
    - Was strategisch interessant war
    - Wo der entscheidende Wendepunkt der Partie lag
    - Was der Spieler aus der Partie lernen kann
 
-2. \`moments\`: Eine Liste der **5 bis 10 wichtigsten oder lehrreichsten Züge** (kritische Momente), jeweils mit:
+2. "moments": Eine Liste der **5 bis 10 wichtigsten oder lehrreichsten Züge** (kritische Momente), jeweils mit:
    - \`ply\`: Halbzugnummer (z. B. 14 = 7... für Schwarz)
    - \`move\`: Der gespielte Zug in SAN-Notation (z. B. Nf3, Qxd5, O-O)
    - \`color\`: \`"white"\` oder \`"black"\`
@@ -93,7 +181,7 @@ Bitte schreibe die Analyse so, dass sie für fortgeschrittene Anfänger bis unte
 
 Hier ist die Partie im PGN-Format:
 
-${body.pgn}`;
+${normalizedPgn}`;
 
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
@@ -116,15 +204,26 @@ ${body.pgn}`;
         }
       }
 
+      // Erstelle die Antwort
       const response: AnalyzeResponse = {
         ok: true,
-        summary: summary
+        summary: summary,
+        cached: false
       };
+      
+      // Speichere die Antwort im Filesystem-Cache
+      await saveToCache(normalizedPgn, {
+        timestamp: Date.now(),
+        response: response
+      });
+      
+      // Logging
+      console.log(`Saved analysis to filesystem cache`);
       
       return c.json(response);
     } catch (anthropicError) {
       console.error('Anthropic API error:', anthropicError);
-      return c.json({ 
+      return c.json({
         ok: false, 
         error: 'Error analyzing game with Anthropic API',
         details: anthropicError instanceof Error ? anthropicError.message : 'Unknown error'
