@@ -6,13 +6,23 @@ interface ChessBoardProps {
   fen: string;
   onPieceDrop: (sourceSquare: Square, targetSquare: Square) => boolean;
   getPossibleMoves: (square: Square) => Square[];
+  onMoveChange?: (moveIndex: number) => void;  // Neue Prop für Zugsnavigation
+  currentMoveIndex?: number;                   // Aktuelle Position in der Zughistorie
+  maxMoveIndex?: number;                       // Maximaler Index (Anzahl Züge - 1)
 }
 
 /**
  * ChessBoard component that handles the interactive chess board
  * Uses react-chessboard for rendering and handles drag-and-drop interaction
  */
-export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardProps) {
+export function ChessBoard({ 
+  fen, 
+  onPieceDrop, 
+  getPossibleMoves, 
+  onMoveChange, 
+  currentMoveIndex = -1, 
+  maxMoveIndex = 0 
+}: ChessBoardProps) {
   const [highlightedSquares, setHighlightedSquares] = useState<Record<string, Record<string, string>>>({});
   const [boardWidth, setBoardWidth] = useState<number>(560); // Default-Wert
   const boardContainerRef = useRef<HTMLDivElement>(null);
@@ -47,6 +57,45 @@ export function ChessBoard({ fen, onPieceDrop, getPossibleMoves }: ChessBoardPro
       window.removeEventListener('resize', handleResize);
     };
   }, [calculateBoardWidth]);
+  
+  // Wheel-Event-Handler für Navigation durch die Zughistorie
+  useEffect(() => {
+    // Funktion zum Verarbeiten des Scrollrads
+    const handleWheel = (e: WheelEvent) => {
+      // Nur reagieren, wenn onMoveChange Callback existiert
+      if (!onMoveChange) return;
+      
+      // Scroll nach unten = vorwärts (nächster Zug)
+      if (e.deltaY > 0) {
+        // Nur wenn nicht am Ende
+        if (currentMoveIndex < maxMoveIndex) {
+          e.preventDefault();
+          onMoveChange(currentMoveIndex + 1);
+        }
+      } 
+      // Scroll nach oben = rückwärts (vorheriger Zug)
+      else if (e.deltaY < 0) {
+        // Nur wenn nicht am Anfang
+        if (currentMoveIndex > -1) {
+          e.preventDefault();
+          onMoveChange(currentMoveIndex - 1);
+        }
+      }
+    };
+    
+    // Event-Listener hinzufügen
+    const boardElement = boardContainerRef.current;
+    if (boardElement) {
+      boardElement.addEventListener('wheel', handleWheel, { passive: false });
+    }
+    
+    // Cleanup
+    return () => {
+      if (boardElement) {
+        boardElement.removeEventListener('wheel', handleWheel);
+      }
+    };
+  }, [currentMoveIndex, maxMoveIndex, onMoveChange]);
 
   // Handle when a piece is dragged over a square
   const onDragStart = useCallback((piece: string, square: Square) => {

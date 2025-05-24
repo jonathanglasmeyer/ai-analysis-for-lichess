@@ -99,6 +99,9 @@ function App() {
                 fen={fen}
                 onPieceDrop={handlePieceDrop}
                 getPossibleMoves={getPossibleMoves}
+                onMoveChange={goToMove}
+                currentMoveIndex={history.currentMoveIndex}
+                maxMoveIndex={history.moves.length - 1}
               />
             </div>
           </div>

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { ChessHistory } from '../types/chess';
 
 interface MoveListProps {
@@ -11,6 +12,24 @@ interface MoveListProps {
  */
 export function MoveList({ history, onMoveClick }: MoveListProps) {
   const { moves, currentMoveIndex } = history;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const currentMoveRef = useRef<HTMLDivElement | null>(null);
+  
+  // Scroll zum aktuellen Zug, wenn sich der currentMoveIndex ändert
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      if (currentMoveIndex === -1) {
+        // Bei Startposition zum Anfang scrollen
+        scrollContainerRef.current.scrollTop = 0;
+      } else if (currentMoveRef.current) {
+        // Sonst zum aktuellen Zug scrollen
+        currentMoveRef.current.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'nearest' 
+        });
+      }
+    }
+  }, [currentMoveIndex]);
 
   // Organize moves in pairs (white and black moves together)
   const renderMoves = () => {
@@ -27,6 +46,7 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
           <div 
             className={`w-14 px-1 cursor-pointer hover:bg-gray-200 ${i === currentMoveIndex ? 'bg-blue-200 font-bold' : ''}`}
             onClick={() => onMoveClick(i)}
+            ref={i === currentMoveIndex ? currentMoveRef : null}
           >
             {whiteMove.san}
           </div>
@@ -34,6 +54,7 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
             <div 
               className={`w-14 px-1 cursor-pointer hover:bg-gray-200 ${i + 1 === currentMoveIndex ? 'bg-blue-200 font-bold' : ''}`}
               onClick={() => onMoveClick(i + 1)}
+              ref={i + 1 === currentMoveIndex ? currentMoveRef : null}
             >
               {blackMove.san}
             </div>
@@ -47,7 +68,7 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto" ref={scrollContainerRef}>
         {moves.length === 0 ? (
           <div className="text-gray-500 italic p-4">No moves yet</div>
         ) : (
