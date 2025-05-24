@@ -134,16 +134,37 @@ export function useChessGame() {
   // Import a game from PGN notation
   const importPgn = useCallback((pgn: string) => {
     try {
+      // Lade PGN in ein neues Spiel
       const newGame = new Chess();
       newGame.loadPgn(pgn);
-      setGame(newGame);
-      updateHistory(newGame);
+      
+      // Extrahiere die Zughistorie
+      const moveHistory = newGame.history({ verbose: true });
+      const formattedMoves: ChessMove[] = moveHistory.map((move: any, index: number) => ({
+        san: move.san,
+        from: move.from,
+        to: move.to,
+        piece: move.piece,
+        color: move.color,
+        flags: move.flags,
+        index,
+      }));
+      
+      // Setze das Spiel zurück auf die Anfangsposition
+      setGame(new Chess());
+      
+      // Aktualisiere die Historie, aber setze currentMoveIndex auf -1 (Anfangsposition)
+      setHistory({
+        moves: formattedMoves,
+        currentMoveIndex: -1,
+      });
+      
       return true;
     } catch (error) {
       console.error('Invalid PGN:', error);
       return false;
     }
-  }, [updateHistory]);
+  }, []);
 
   // Reset the game to the starting position
   const resetGame = useCallback(() => {
