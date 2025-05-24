@@ -423,6 +423,7 @@ export const fetchUserGames = async (
       .map((line: string) => JSON.parse(line));
 
     console.log(`${games.length} Spiele geladen`);
+    console.log(games);
     return games;
   } catch (error) {
     console.error('Fehler beim Abrufen der Spiele:', error);

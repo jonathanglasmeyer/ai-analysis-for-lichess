@@ -29,7 +29,6 @@ export function useChessGame() {
   const updateHistory = useCallback((chessInstance: Chess) => {
     try {
       const moveHistory = chessInstance.history({ verbose: true });
-      console.log('Move history:', moveHistory); // Debug-Ausgabe
       
       const formattedMoves: ChessMove[] = moveHistory.map((move: any, index: number) => ({
         san: move.san,
