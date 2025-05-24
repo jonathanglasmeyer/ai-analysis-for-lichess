@@ -64,6 +64,19 @@ export function ChessBoard({
     const handleWheel = (e: WheelEvent) => {
       // Nur reagieren, wenn onMoveChange Callback existiert
       if (!onMoveChange) return;
+
+      // Unterscheidung zwischen echtem Scrollwheel und Touchpad-Gesten
+      // Echte Mausräder haben oft größere deltaY-Werte und der deltaMode ist 0 (pixel) oder 1 (line)
+      // Touchpads haben oft präzisere, kleinere Werte und deltaX-Werte ungleich 0
+      const isTouchpad = (
+        // Touchpads haben oft horizontale Scrollkomponenten
+        Math.abs(e.deltaX) > 0 || 
+        // Touchpads haben oft präzisere, kleinere Werte
+        Math.abs(e.deltaY) < 10
+      );
+
+      // Nur für echte Scrollwheels reagieren
+      if (isTouchpad) return;
       
       // Scroll nach unten = vorwärts (nächster Zug)
       if (e.deltaY > 0) {
