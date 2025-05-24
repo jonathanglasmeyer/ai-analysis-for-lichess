@@ -1,10 +1,11 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Square } from 'chess.js';
 import { useChessGame } from './hooks/useChessGame';
 import { ChessBoard } from './components/ChessBoard';
 import { MoveList } from './components/MoveList';
 import { LichessSidebar } from './components/LichessSidebar';
 import { CopyPgnButton } from './components/CopyPgnButton';
+import { AnalyzeButton } from './components/AnalyzeButton';
 import { initAuth } from './services/lichessApi';
 
 /**
@@ -13,6 +14,9 @@ import { initAuth } from './services/lichessApi';
  * Inspired by lichess.org analysis view
  */
 function App() {
+  // State für Analyseergebnisse
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  
   // Initialisiere Lichess-Authentifizierung beim App-Start
   useEffect(() => {
     // Initialisiere die Authentifizierung und prüfe, ob der Benutzer von der Auth-Seite zurückgeleitet wurde
@@ -62,6 +66,25 @@ function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goToMove, history.currentMoveIndex, history.moves.length]);
+  
+  // Event-Listener für Analyseergebnisse
+  useEffect(() => {
+    const handleAnalysisResult = (event: CustomEvent<any>) => {
+      setAnalysisResult(event.detail.summary);
+    };
+
+    const handleAnalysisError = (event: CustomEvent<any>) => {
+      setAnalysisResult(`Error: ${event.detail.error}`);
+    };
+
+    window.addEventListener('chess-analysis-result', handleAnalysisResult as EventListener);
+    window.addEventListener('chess-analysis-error', handleAnalysisError as EventListener);
+
+    return () => {
+      window.removeEventListener('chess-analysis-result', handleAnalysisResult as EventListener);
+      window.removeEventListener('chess-analysis-error', handleAnalysisError as EventListener);
+    };
+  }, []);
 
   // Handle piece drops on the board
   const handlePieceDrop = useCallback(
@@ -104,6 +127,16 @@ function App() {
                 maxMoveIndex={history.moves.length - 1}
               />
             </div>
+            
+            {/* Analyse-Ergebnisse */}
+            {analysisResult && (
+              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Game Analysis</h3>
+                <div className="text-sm text-gray-600 whitespace-pre-wrap">
+                  {analysisResult}
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Move history section */}
@@ -112,7 +145,10 @@ function App() {
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-[740px]">
               <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
                 <h2 className="text-sm font-medium text-gray-700">Move History</h2>
-                <CopyPgnButton exportPgn={exportPgn} />
+                <div className="flex items-center gap-2">
+                  <AnalyzeButton exportPgn={exportPgn} />
+                  <CopyPgnButton exportPgn={exportPgn} />
+                </div>
               </div>
               <div className="flex-1 overflow-hidden relative">
                 <MoveList history={history} onMoveClick={goToMove} />

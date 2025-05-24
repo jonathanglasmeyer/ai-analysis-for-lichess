@@ -1,0 +1,17 @@
+services:
+  # A web service for the Chess-GPT API
+  - type: web
+    name: chess-gpt-api
+    runtime: docker
+    region: frankfurt # Change to your preferred region
+    plan: free
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: ANTHROPIC_API_KEY
+        sync: false # This indicates that the value will be set in the Render.com dashboard
+    autoDeploy: true
+    healthCheckPath: / # Uses the root endpoint for health checks
+    buildFilter:
+      paths:
+        - server/**
