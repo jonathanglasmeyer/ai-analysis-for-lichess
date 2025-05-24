@@ -15,7 +15,7 @@ import { initAuth } from './services/lichessApi';
  */
 function App() {
   // State für Analyseergebnisse
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any>(null);
   
   // Initialisiere Lichess-Authentifizierung beim App-Start
   useEffect(() => {
@@ -70,11 +70,15 @@ function App() {
   // Event-Listener für Analyseergebnisse
   useEffect(() => {
     const handleAnalysisResult = (event: CustomEvent<any>) => {
-      setAnalysisResult(event.detail.summary);
+      // Speichere das gesamte Analyseergebnis, nicht nur die Zusammenfassung
+      setAnalysisResult(event.detail);
     };
 
     const handleAnalysisError = (event: CustomEvent<any>) => {
-      setAnalysisResult(`Error: ${event.detail.error}`);
+      setAnalysisResult({
+        ok: false,
+        error: event.detail.error
+      });
     };
 
     window.addEventListener('chess-analysis-result', handleAnalysisResult as EventListener);
@@ -102,56 +106,126 @@ function App() {
   }, [importPgn]);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10">
-      <div className="container mx-auto px-6 max-w-[1400px]">
-        <h1 className="text-2xl font-medium mb-8 text-gray-800">Chess Analysis</h1>
+    <div className="min-h-screen bg-gray-50 py-6">
+      <div className="container mx-auto px-2 max-w-[1600px]">
+        <h1 className="text-2xl font-medium mb-6 text-gray-800">Chess Analysis</h1>
         
-        <div className="flex flex-col lg:flex-row gap-10">
+        <div className="flex flex-col lg:flex-row gap-4">
           
-          {/* Lichess Seitenleiste */}
-          <div className="w-full lg:w-[380px] order-3 lg:order-1 lg:sticky lg:top-8 self-start">
+          {/* Lichess Seitenleiste - schmaler */}
+          <div className="w-full lg:w-[280px] order-3 lg:order-1 lg:sticky lg:top-8 self-start">
             <div className="bg-white border border-gray-200 rounded-lg h-[calc(100vh-120px)] overflow-hidden">
               <LichessSidebar onSelectGame={handleLichessGameSelect} />
             </div>
           </div>
         
-          {/* Chess board section */}
-          <div className="flex-1 order-1 lg:order-2 flex flex-col gap-6">
-            <div className="flex justify-center" id="chessboard-container">
-              <ChessBoard
-                fen={fen}
-                onPieceDrop={handlePieceDrop}
-                getPossibleMoves={getPossibleMoves}
-                onMoveChange={goToMove}
-                currentMoveIndex={history.currentMoveIndex}
-                maxMoveIndex={history.moves.length - 1}
-              />
-            </div>
-            
-            {/* Analyse-Ergebnisse */}
-            {analysisResult && (
-              <div className="mt-4 p-4 bg-white border border-gray-200 rounded-lg">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Game Analysis</h3>
-                <div className="text-sm text-gray-600 whitespace-pre-wrap">
-                  {analysisResult}
-                </div>
+          {/* Mittlerer Bereich: Schachbrett und Analyse nebeneinander */}
+          <div className="flex-1 order-1 lg:order-2">
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Schachbrett - jetzt mit fester Breite */}
+              <div className="lg:w-auto">
+                <ChessBoard
+                  fen={fen}
+                  onPieceDrop={handlePieceDrop}
+                  getPossibleMoves={getPossibleMoves}
+                  onMoveChange={goToMove}
+                  currentMoveIndex={history.currentMoveIndex}
+                  maxMoveIndex={history.moves.length - 1}
+                />
               </div>
-            )}
-          </div>
-          
-          {/* Move history section */}
-          <div className="w-full lg:w-[300px] order-2 lg:order-3 flex flex-col gap-6">
-            {/* Zughistorie */}
-            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-[740px]">
-              <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-                <h2 className="text-sm font-medium text-gray-700">Move History</h2>
-                <div className="flex items-center gap-2">
-                  <AnalyzeButton exportPgn={exportPgn} />
-                  <CopyPgnButton exportPgn={exportPgn} />
+              
+              {/* Rechter Bereich: Analyse und Zughistorie */}
+              <div className="flex-1 flex flex-col gap-4">
+                
+                {/* Analyse-Sektion - immer sichtbar */}
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-sm font-medium text-gray-700">Spielanalyse</h2>
+                    <AnalyzeButton exportPgn={exportPgn} pgn={exportPgn()} />
+                  </div>
+                  <div className="p-4 max-h-[300px] overflow-y-auto">
+                    {/* Fehleranzeige */}
+                    {analysisResult && !analysisResult.ok && (
+                      <div className="text-sm text-red-500 mb-4">
+                        <h3 className="font-medium text-red-600 mb-2">Fehler bei der Analyse</h3>
+                        <p>{analysisResult.error || 'Ein unbekannter Fehler ist aufgetreten'}</p>
+                      </div>
+                    )}
+                    
+                    {/* Keine Analyse vorhanden */}
+                    {!analysisResult && (
+                      <div className="flex flex-col items-center justify-center py-8 text-gray-500 text-sm">
+                        <p>Klicke auf 'Analyze', um eine KI-Analyse der aktuellen Partie zu erhalten.</p>
+                      </div>
+                    )}
+                    
+                    {/* Analyse-Ergebnisse, wenn vorhanden */}
+                    {analysisResult && analysisResult.ok && (() => {
+                      try {
+                        // Versuche, das JSON aus dem String zu extrahieren
+                        const jsonMatch = analysisResult.summary.match(/```json\n([\s\S]*?)\n```/);
+                        if (jsonMatch && jsonMatch[1]) {
+                          const parsedData = JSON.parse(jsonMatch[1]);
+                          return (
+                            <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                              <h3 className="font-medium mb-2">Zusammenfassung</h3>
+                              <p className="mb-4">{parsedData.summary}</p>
+                              
+                              {parsedData.moments && parsedData.moments.length > 0 && (
+                                <>
+                                  <h3 className="font-medium mt-4 mb-2">Wichtige Momente</h3>
+                                  <div className="space-y-3">
+                                    {parsedData.moments.slice(0, 3).map((moment: any, index: number) => (
+                                      <div key={index} className="p-2 bg-gray-50 rounded">
+                                        <div className="font-medium">
+                                          Zug {Math.floor(moment.ply/2) + (moment.ply % 2 === 0 ? 0 : 0.5)}: 
+                                          <span className={moment.color === 'white' ? 'text-blue-600' : 'text-gray-800'}>
+                                            {moment.move}
+                                          </span>
+                                        </div>
+                                        <p className="text-xs mt-1">{moment.comment}</p>
+                                        {moment.recommendation && (
+                                          <p className="text-xs mt-1 text-green-600">
+                                            Besser: {moment.recommendation} - {moment.reasoning}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                    {parsedData.moments.length > 3 && (
+                                      <p className="text-xs text-gray-500 italic">
+                                        + {parsedData.moments.length - 3} weitere wichtige Momente
+                                      </p>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          );
+                        }
+                      } catch (e) {
+                        console.error('Error parsing analysis JSON:', e);
+                      }
+                      
+                      // Fallback: Zeige den Rohtext an
+                      return (
+                        <div className="text-sm text-gray-600 whitespace-pre-wrap">
+                          {analysisResult.summary}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
-              </div>
-              <div className="flex-1 overflow-hidden relative">
-                <MoveList history={history} onMoveClick={goToMove} />
+                
+                {/* Zughistorie */}
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-grow">
+                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-sm font-medium text-gray-700">Move History</h2>
+                    <CopyPgnButton exportPgn={exportPgn} />
+                  </div>
+                  <div className="flex-1 overflow-hidden relative">
+                    <MoveList history={history} onMoveClick={goToMove} />
+                  </div>
+                </div>
               </div>
             </div>
           </div>

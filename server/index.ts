@@ -17,6 +17,16 @@ interface AnalyzeResponse {
   cached?: boolean; // Zeigt an, ob die Antwort aus dem Cache kam
 }
 
+interface CheckCacheRequest {
+  pgn: string;
+}
+
+interface CheckCacheResponse {
+  inCache: boolean;
+  // Wenn im Cache, senden wir die Analyse direkt zurück
+  analysis?: AnalyzeResponse;
+}
+
 // Cache für PGN-Analysen
 interface CacheEntry {
   timestamp: number;
@@ -117,6 +127,51 @@ app.use('*', cors({
 // Health check endpoint
 app.get('/', (c) => {
   return c.json({ status: 'ok', message: 'Chess-GPT API is running' });
+});
+
+// Cache-Check Endpoint
+app.post('/check-cache', async (c) => {
+  try {
+    const body = await c.req.json<CheckCacheRequest>();
+    
+    if (!body.pgn) {
+      return c.json({ inCache: false }, 400);
+    }
+    
+    // Normalisiere das PGN
+    const normalizedPgn = body.pgn.trim();
+    
+    // Prüfe, ob die Analyse bereits im Cache ist
+    const cachedEntry = await loadFromCache(normalizedPgn);
+    
+    if (cachedEntry) {
+      // Prüfe, ob der Cache-Eintrag noch gültig ist
+      const now = Date.now();
+      
+      if (now - cachedEntry.timestamp < CACHE_EXPIRY) {
+        console.log('Cache check: HIT');
+        
+        // Gibt zurück, dass die Analyse im Cache ist, zusammen mit der Analyse selbst
+        return c.json({
+          inCache: true,
+          analysis: {
+            ...cachedEntry.response,
+            cached: true
+          }
+        });
+      } else {
+        console.log('Cache check: EXPIRED');
+      }
+    } else {
+      console.log('Cache check: MISS');
+    }
+    
+    // Analyse ist nicht im Cache oder abgelaufen
+    return c.json({ inCache: false });
+  } catch (error) {
+    console.error('Error checking cache:', error);
+    return c.json({ inCache: false, error: 'Invalid request' }, 400);
+  }
 });
 
 // Analyze endpoint
