@@ -388,7 +388,21 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
               <div className="mt-1 text-xs flex justify-between items-center">
                 <div className="text-gray-500">
                   {getResultText(game.status, game.winner)} • 
-                  {game.moves?.length ? `${Math.ceil(game.moves.length / 2)} Züge` : 'Keine Züge'}
+                  {game.moves ? (() => {
+                    // Wenn moves ein String ist, zähle die Anzahl der Vollzüge basierend auf Leerzeichen
+                    if (typeof game.moves === 'string') {
+                      // Zähle die Anzahl der Leerzeichen + 1 und teile durch 2 für Vollzüge
+                      const movesStr = game.moves as string;
+                      const movesCount = (movesStr.split(' ').length) / 2;
+                      return `${Math.ceil(movesCount)} Züge`;
+                    }
+                    // Wenn moves ein Array ist, berechne die Vollzüge als Länge / 2
+                    if (Array.isArray(game.moves)) {
+                      return `${Math.ceil(game.moves.length / 2)} Züge`;
+                    }
+                    // Fallback
+                    return '? Züge';
+                  })() : 'Keine Züge'}
                 </div>
                 <span className="text-gray-400">{formatDate(game.createdAt)}</span>
               </div>
