@@ -4,6 +4,7 @@ import { useChessGame } from './hooks/useChessGame';
 import { ChessBoard } from './components/ChessBoard';
 import { MoveList } from './components/MoveList';
 import { LichessSidebar } from './components/LichessSidebar';
+import { CopyPgnButton } from './components/CopyPgnButton';
 import { initAuth } from './services/lichessApi';
 
 /**
@@ -27,6 +28,7 @@ function App() {
     goToMove,
     importPgn,
     getPossibleMoves,
+    exportPgn,
   } = useChessGame();
 
   // Handle piece drops on the board
@@ -73,8 +75,9 @@ function App() {
           <div className="w-full lg:w-[300px] order-2 lg:order-3 flex flex-col gap-6">
             {/* Zughistorie */}
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col h-[740px]">
-              <div className="px-4 py-2 border-b border-gray-100">
+              <div className="px-4 py-2 border-b border-gray-100 flex justify-between items-center">
                 <h2 className="text-sm font-medium text-gray-700">Move History</h2>
+                <CopyPgnButton exportPgn={exportPgn} />
               </div>
               <div className="flex-1 overflow-hidden relative">
                 <MoveList history={history} onMoveClick={goToMove} />
