@@ -102,8 +102,12 @@ function App() {
 
   // Handler für das Laden einer Lichess-Partie
   const handleLichessGameSelect = useCallback((pgn: string) => {
+    // PGN importieren
     importPgn(pgn);
-  }, [importPgn]);
+    
+    // Analyseergebnisse zurücksetzen, wenn eine neue Partie geladen wird
+    setAnalysisResult(null);
+  }, [importPgn, setAnalysisResult]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-3">
