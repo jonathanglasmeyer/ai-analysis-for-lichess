@@ -41,40 +41,30 @@ export function MoveList({ history, onMoveClick }: MoveListProps) {
       const whiteMove = moves[i];
       const blackMove = moves[i + 1];
       
-      // Check if this row contains the current move
-      const rowContainsCurrent = i === currentMoveIndex || (blackMove && i + 1 === currentMoveIndex);
       
       elements.push(
-        <div key={i} className={`flex items-center h-6 text-sm ${rowContainsCurrent ? 'bg-gray-50' : ''}`}>
+        <div key={i} className={`flex items-center h-7 text-sm ${Math.floor(i / 2) % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}> 
           {/* Move number */}
-          <div className="w-8 px-1 text-gray-400 font-medium text-right text-xs">{moveNumber}.</div>
-          
+          <div className="w-8 px-2 text-gray-500 font-medium text-right text-xs">{moveNumber}.</div>
           {/* White move */}
-          <div 
-            className={`flex-1 px-1.5 py-0.5 text-center cursor-pointer transition-colors ${i === currentMoveIndex ? 'text-blue-600 font-medium' : 'hover:bg-gray-100'}`}
+          <div
+            className={`flex-1 px-2 py-1 text-left cursor-pointer transition-colors ${i === currentMoveIndex ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
             onClick={() => onMoveClick(i)}
             ref={i === currentMoveIndex ? currentMoveRef : null}
-            title={whiteMove.san}
           >
-            {i === currentMoveIndex ? (
-              <span className="bg-blue-100 px-1.5 py-0.5 rounded-md">{whiteMove.san}</span>
-            ) : whiteMove.san}
+            <span className="font-[500]">{whiteMove.san}</span>
           </div>
-          
           {/* Black move or placeholder */}
           {blackMove ? (
-            <div 
-              className={`flex-1 px-1.5 py-0.5 text-center cursor-pointer transition-colors ${i + 1 === currentMoveIndex ? 'text-blue-600 font-medium' : 'hover:bg-gray-100'}`}
+            <div
+              className={`flex-1 px-2 py-1 text-left cursor-pointer transition-colors ${i + 1 === currentMoveIndex ? 'bg-gray-200' : 'hover:bg-gray-100'}`}
               onClick={() => onMoveClick(i + 1)}
               ref={i + 1 === currentMoveIndex ? currentMoveRef : null}
-              title={blackMove.san}
             >
-              {i + 1 === currentMoveIndex ? (
-                <span className="bg-blue-100 px-1.5 py-0.5 rounded-md">{blackMove.san}</span>
-              ) : blackMove.san}
+              <span className="font-[500]">{blackMove.san}</span>
             </div>
           ) : (
-            <div className="flex-1"></div> /* Placeholder for missing black move */
+            <div className="flex-1 bg-white"></div> /* Placeholder for missing black move */
           )}
         </div>
       );

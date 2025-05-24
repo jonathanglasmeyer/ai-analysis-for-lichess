@@ -220,7 +220,7 @@ function App() {
                     <h2 className="text-xs font-medium text-gray-700">Move History</h2>
                     <CopyPgnButton exportPgn={exportPgn} />
                   </div>
-                  <div className="h-[calc(100vh-350px)] overflow-hidden relative">
+                  <div className="h-[calc(100vh-385px)] overflow-hidden relative">
                     <MoveList history={history} onMoveClick={goToMove} />
                   </div>
                 </div>
