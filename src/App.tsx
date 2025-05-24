@@ -106,14 +106,13 @@ function App() {
   }, [importPgn]);
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6">
+    <div className="min-h-screen bg-gray-50 py-3">
       <div className="container mx-auto px-2 max-w-[1600px]">
-        <h1 className="text-2xl font-medium mb-6 text-gray-800">Chess Analysis</h1>
         
         <div className="flex flex-col lg:flex-row gap-4">
           
           {/* Lichess Seitenleiste - schmaler */}
-          <div className="w-full lg:w-[280px] order-3 lg:order-1 lg:sticky lg:top-8 self-start">
+          <div className="w-full lg:w-[280px] order-3 lg:order-1 lg:sticky self-start">
             <div className="bg-white border border-gray-200 rounded-lg h-[calc(100vh-120px)] overflow-hidden">
               <LichessSidebar onSelectGame={handleLichessGameSelect} />
             </div>
@@ -139,11 +138,11 @@ function App() {
                 
                 {/* Analyse-Sektion - immer sichtbar */}
                 <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-sm font-medium text-gray-700">Spielanalyse</h2>
+                  <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-xs font-medium text-gray-700">Spielanalyse</h2>
                     <AnalyzeButton exportPgn={exportPgn} pgn={exportPgn()} />
                   </div>
-                  <div className="p-4 max-h-[300px] overflow-y-auto">
+                  <div className="p-3 max-h-[250px] overflow-y-auto">
                     {/* Fehleranzeige */}
                     {analysisResult && !analysisResult.ok && (
                       <div className="text-sm text-red-500 mb-4">
@@ -168,7 +167,6 @@ function App() {
                           const parsedData = JSON.parse(jsonMatch[1]);
                           return (
                             <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                              <h3 className="font-medium mb-2">Zusammenfassung</h3>
                               <p className="mb-4">{parsedData.summary}</p>
                               
                               {parsedData.moments && parsedData.moments.length > 0 && (
@@ -217,28 +215,18 @@ function App() {
                 </div>
                 
                 {/* Zughistorie */}
-                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col flex-grow">
-                  <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center">
-                    <h2 className="text-sm font-medium text-gray-700">Move History</h2>
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden flex flex-col">
+                  <div className="px-3 py-2 border-b border-gray-100 flex justify-between items-center">
+                    <h2 className="text-xs font-medium text-gray-700">Move History</h2>
                     <CopyPgnButton exportPgn={exportPgn} />
                   </div>
-                  <div className="flex-1 overflow-hidden relative">
+                  <div className="h-[calc(100vh-350px)] overflow-hidden relative">
                     <MoveList history={history} onMoveClick={goToMove} />
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-        
-        <div className="mt-8 text-sm text-gray-500">
-          <p>
-            This chess analysis board allows you to explore chess positions and variations.
-            Drag pieces to make moves, navigate through the move history, and import/export games in PGN format.
-          </p>
-          <p className="mt-2">
-            Future additions could include engine analysis, evaluation bars, and variation trees.
-          </p>
         </div>
       </div>
     </div>
