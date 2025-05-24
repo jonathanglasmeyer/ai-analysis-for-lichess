@@ -30,6 +30,38 @@ function App() {
     getPossibleMoves,
     exportPgn,
   } = useChessGame();
+  
+  // Tastaturnavigation für Zughistorie
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Nur reagieren, wenn keine Eingabefelder fokussiert sind
+      if (document.activeElement?.tagName === 'INPUT' || 
+          document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === 'ArrowLeft') {
+        if (e.shiftKey) {
+          // Erster Zug (mit Shift)
+          goToMove(-1);
+        } else {
+          // Vorheriger Zug
+          goToMove(history.currentMoveIndex - 1);
+        }
+      } else if (e.key === 'ArrowRight') {
+        if (e.shiftKey) {
+          // Letzter Zug (mit Shift)
+          goToMove(history.moves.length - 1);
+        } else {
+          // Nächster Zug
+          goToMove(history.currentMoveIndex + 1);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [goToMove, history.currentMoveIndex, history.moves.length]);
 
   // Handle piece drops on the board
   const handlePieceDrop = useCallback(
