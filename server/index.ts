@@ -50,7 +50,7 @@ async function initializeCache() {
 // Generiere einen Hash für das PGN als Dateinamen
 function getCacheFilename(pgn: string): string {
   const hash = crypto.createHash('md5').update(pgn).digest('hex');
-  return path.join(CACHE_DIR, `${hash}.json`);
+  return `${hash}.json`;
 }
 
 // Lade einen Cache-Eintrag
@@ -68,14 +68,130 @@ async function loadFromCache(pgn: string): Promise<CacheEntry | null> {
 
 // Speichere einen Eintrag im Cache
 async function saveToCache(pgn: string, entry: CacheEntry): Promise<void> {
-  const cacheFile = getCacheFilename(pgn);
-  
   try {
-    await fs.writeFile(cacheFile, JSON.stringify(entry, null, 2), 'utf-8');
-    console.log(`Saved analysis to cache: ${cacheFile}`);
+    const cacheFile = path.join(CACHE_DIR, getCacheFilename(pgn));
+    await fs.writeFile(cacheFile, JSON.stringify(entry, null, 2), 'utf8');
   } catch (error) {
     console.error('Failed to save to cache:', error);
+    // Wir lassen den Fehler hier nicht weiter propagieren, um den Hauptablauf nicht zu stören
   }
+}
+
+// Bereinigt und repariert die Antwort von Claude
+function sanitizeClaudeResponse(response: string): string {
+  console.log('==== SANITIZE CLAUDE RESPONSE START ====');
+  console.log('Original response length:', response.length);
+  console.log('First 100 chars:', response.substring(0, 100));
+  
+  // 1. Prüfe, ob die Antwort in einen Markdown-Codeblock eingebettet ist
+  const jsonBlockRegex = /```(?:json)?([\s\S]*?)```/g;
+  const match = jsonBlockRegex.exec(response);
+  
+  // Fall 1: JSON in Markdown-Codeblock - wir überprüfen das JSON im Block
+  if (match && match[1]) {
+    console.log('✅ Found JSON in markdown codeblock!');
+    const jsonContent = match[1].trim();
+    console.log('JSON content length in block:', jsonContent.length);
+    
+    // Versuche das JSON zu parsen
+    try {
+      JSON.parse(jsonContent);
+      console.log('✅ JSON in codeblock is valid!');
+      console.log('==== SANITIZE CLAUDE RESPONSE END (VALID BLOCK) ====');
+      // Original response zurückgeben, da das JSON bereits gültig ist
+      return response;
+    } catch (error) {
+      // JSON in Block ist ungültig, versuchen wir es zu reparieren
+      console.warn('❌ Invalid JSON in codeblock, attempting to fix...', error);
+      console.log('Error message:', (error as Error).message);
+      
+      // JSON reparieren
+      const fixedJson = fixJsonContent(jsonContent);
+      
+      // Wenn erfolgreich repariert, ersetzen wir nur den JSON-Teil im Codeblock
+      try {
+        JSON.parse(fixedJson);
+        console.log('✅ Successfully fixed JSON in codeblock!');
+        // Ersetze nur den JSON-Teil im Codeblock
+        const fixedResponse = response.replace(jsonBlockRegex, 
+          (_, blockContent) => '```json\n' + fixedJson + '\n```');
+        console.log('==== SANITIZE CLAUDE RESPONSE END (FIXED BLOCK) ====');
+        return fixedResponse;
+      } catch (jsonError) {
+        console.error('❌ Could not fix JSON in codeblock:', (jsonError as Error).message);
+        console.log('==== SANITIZE CLAUDE RESPONSE END (FAILED BLOCK) ====');
+        return response; // Original zurückgeben, wenn wir es nicht reparieren können
+      }
+    }
+  } 
+  
+  // Fall 2: Kein Markdown-Block - prüfen, ob es direktes JSON ist
+  console.log('No markdown code block found, checking if direct JSON');
+  try {
+    // Versuche zu parsen (nur als Test)
+    JSON.parse(response);
+    console.log('✅ Direct JSON is valid!');
+    console.log('==== SANITIZE CLAUDE RESPONSE END (VALID DIRECT) ====');
+    // Für konsistente Verarbeitung im Client: Wir verpacken es in einen Markdown-Block
+    return '```json\n' + response + '\n```';
+  } catch (error) {
+    console.warn('❌ Invalid direct JSON detected, attempting to fix...', error);
+    
+    // Versuche, das JSON zu reparieren
+    const fixedJson = fixJsonContent(response);
+    
+    try {
+      JSON.parse(fixedJson);
+      console.log('✅ Successfully fixed direct JSON!');
+      console.log('==== SANITIZE CLAUDE RESPONSE END (FIXED DIRECT) ====');
+      // Wir verpacken es in einen Markdown-Block für die Konsistenz
+      return '```json\n' + fixedJson + '\n```';
+    } catch (jsonError) {
+      console.error('❌ Could not fix direct JSON:', (jsonError as Error).message);
+      console.log('==== SANITIZE CLAUDE RESPONSE END (FAILED DIRECT) ====');
+      // Wir geben die ursprüngliche Antwort zurück
+      return response;
+    }
+  }
+}
+
+// Hilfsfunktion zur Reparatur von JSON-Inhalten
+function fixJsonContent(jsonContent: string): string {
+  let fixedResponse = jsonContent;
+  
+  // a) Doppelte Kommas entfernen (z.B. {"a": 1,, "b": 2})
+  const originalLength1 = fixedResponse.length;
+  fixedResponse = fixedResponse.replace(/,\s*,/g, ',');
+  if (originalLength1 !== fixedResponse.length) {
+    console.log('🔧 Fixed double commas');
+  }
+  
+  // b) Kommas vor schließenden Klammern entfernen (z.B. {"a": 1, "b": 2,})
+  const originalLength2 = fixedResponse.length;
+  fixedResponse = fixedResponse.replace(/,\s*}/g, '}');
+  fixedResponse = fixedResponse.replace(/,\s*\]/g, ']');
+  if (originalLength2 !== fixedResponse.length) {
+    console.log('🔧 Fixed trailing commas');
+  }
+  
+  // c) Kommas nach den öffnenden Klammern entfernen
+  const originalLength3 = fixedResponse.length;
+  fixedResponse = fixedResponse.replace(/{\s*,/g, '{');
+  fixedResponse = fixedResponse.replace(/\[\s*,/g, '[');
+  if (originalLength3 !== fixedResponse.length) {
+    console.log('🔧 Fixed leading commas');
+  }
+  
+  // d) Unbalancierte Anführungszeichen beheben (sehr vereinfacht)
+  // Zähle die Anführungszeichen außerhalb von Escape-Sequenzen
+  const quoteCount = (fixedResponse.match(/(?<!\\)"/g) || []).length;
+  console.log('Quote count:', quoteCount);
+  if (quoteCount % 2 !== 0) {
+    console.warn('⚠️ Unbalanced quotes detected in JSON - this is harder to fix automatically');
+  }
+  
+  console.log('After fixes, first 100 chars:', fixedResponse.substring(0, 100));
+  return fixedResponse;
 }
 
 // Load environment variables
@@ -215,13 +331,33 @@ app.post('/analyze', async (c) => {
     try {
       console.log('Cache miss, calling Anthropic API');
       
-      const prompt = `Du bist ein Schachexperte. Bitte analysiere die folgende Partie und gib die Antwort im **JSON-Format** zurück – mit zwei Abschnitten:
+      const prompt = `Du bist ein Schachexperte. Bitte analysiere die folgende Partie und gib die Antwort im **JSON-Format** zurück.
+      Gib die Antwort ausschließlich als valide JSON-Struktur zurück. Keine Kommentare, keine Einleitung, keine Erklärungen außerhalb des JSON! 
+      Benutze ausschließlich gültige JSON-Syntax, insbesondere keine abschließenden Klammern oder Kommata an falscher Stelle. 
+      Benutze ausschließlich doppelte Anführungszeichen (") und keine typografischen Zeichen.
+      
+      Beispiel:
+      {
+        "summary": "string",
+        "moments": [
+          {
+            "ply": 0,
+            "move": "string",
+            "color": "white|black",
+            "comment": "string",
+            "recommendation": "string",
+            "reasoning": "string"
+          }
+        ]
+      }
+      
 
 1. "summary": Eine kurze Gesamteinschätzung (2–4 Absätze), in der du erklärst:
    - Wer wann die Initiative hatte
    - Was strategisch interessant war
    - Wo der entscheidende Wendepunkt der Partie lag
    - Was der Spieler aus der Partie lernen kann
+   Innerhalb der Summary sollst du Referenzen auf Züge immer eindeutig identifizieren in folgender Form, z.B. [14. Nf3], oder bei schwarz [14... Nf6]. 
 
 2. "moments": Eine Liste der **5 bis 10 wichtigsten oder lehrreichsten Züge** (kritische Momente), jeweils mit:
    - \`ply\`: Halbzugnummer (z. B. 14 = 7... für Schwarz)
@@ -258,6 +394,9 @@ ${normalizedPgn}`;
           }
         }
       }
+      
+      // Sanitize und repariere die Claude-Antwort, falls nötig
+      summary = sanitizeClaudeResponse(summary);
 
       // Erstelle die Antwort
       const response: AnalyzeResponse = {

@@ -115,8 +115,8 @@ function App() {
         
         <div className="flex flex-col lg:flex-row gap-4">
           
-          {/* Lichess Seitenleiste - schmaler */}
-          <div className="w-full lg:w-[280px] order-3 lg:order-1 lg:sticky self-start">
+          {/* Lichess Seitenleiste - breiter für detailliertere Anzeige */}
+          <div className="w-full lg:w-[320px] order-3 lg:order-1 lg:sticky self-start">
             <div className="bg-white border border-gray-200 rounded-lg h-[calc(100vh-120px)] overflow-hidden">
               <LichessSidebar onSelectGame={handleLichessGameSelect} />
             </div>
@@ -162,50 +162,124 @@ function App() {
                       </div>
                     )}
                     
+                    {/* Hilfsfunktion zum Bereinigen und Reparieren von JSON */}
                     {/* Analyse-Ergebnisse, wenn vorhanden */}
                     {analysisResult && analysisResult.ok && (() => {
+                      // Hilfsfunktion, um fehlerhafte JSON-Strings zu reparieren
+                      const sanitizeJsonString = (jsonStr: string): string => {
+                        let fixed = jsonStr;
+                        
+                        // Doppelte Kommas entfernen
+                        fixed = fixed.replace(/,\s*,/g, ',');
+                        
+                        // Kommas vor schließenden Klammern entfernen
+                        fixed = fixed.replace(/,\s*}/g, '}');
+                        fixed = fixed.replace(/,\s*\]/g, ']');
+                        
+                        // Kommas nach öffnenden Klammern entfernen
+                        fixed = fixed.replace(/{\s*,/g, '{');
+                        fixed = fixed.replace(/\[\s*,/g, '[');
+                        
+                        return fixed;
+                      };
+                      
                       try {
                         // Versuche, das JSON aus dem String zu extrahieren
                         const jsonMatch = analysisResult.summary.match(/```json\n([\s\S]*?)\n```/);
+                        
                         if (jsonMatch && jsonMatch[1]) {
-                          const parsedData = JSON.parse(jsonMatch[1]);
-                          return (
-                            <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                              <p className="mb-4">{parsedData.summary}</p>
-                              
-                              {parsedData.moments && parsedData.moments.length > 0 && (
-                                <>
-                                  <h3 className="font-medium mt-4 mb-2">Wichtige Momente</h3>
-                                  <div className="space-y-3">
-                                    {parsedData.moments.slice(0, 3).map((moment: any, index: number) => (
-                                      <div key={index} className="p-2 bg-gray-50 rounded">
-                                        <div className="font-medium">
-                                          Zug {Math.floor(moment.ply/2) + (moment.ply % 2 === 0 ? 0 : 0.5)}: 
-                                          <span className={moment.color === 'white' ? 'text-blue-600' : 'text-gray-800'}>
-                                            {moment.move}
-                                          </span>
+                          let jsonContent = jsonMatch[1].trim();
+                          
+                          // Versuche zu parsen
+                          try {
+                            const parsedData = JSON.parse(jsonContent);
+                            return (
+                              <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                                <p className="mb-4">{parsedData.summary}</p>
+                                
+                                {parsedData.moments && parsedData.moments.length > 0 && (
+                                  <>
+                                    <h3 className="font-medium mt-4 mb-2">Wichtige Momente</h3>
+                                    <div className="space-y-3">
+                                      {parsedData.moments.slice(0, 3).map((moment: any, index: number) => (
+                                        <div key={index} className="p-2 bg-gray-50 rounded">
+                                          <div className="font-medium">
+                                            Zug {Math.floor(moment.ply/2) + (moment.ply % 2 === 0 ? 0 : 0.5)}: 
+                                            <span className={moment.color === 'white' ? 'text-blue-600' : 'text-gray-800'}>
+                                              {moment.move}
+                                            </span>
+                                          </div>
+                                          <p className="text-xs mt-1">{moment.comment}</p>
+                                          {moment.recommendation && (
+                                            <p className="text-xs mt-1 text-green-600">
+                                              Besser: {moment.recommendation} - {moment.reasoning}
+                                            </p>
+                                          )}
                                         </div>
-                                        <p className="text-xs mt-1">{moment.comment}</p>
-                                        {moment.recommendation && (
-                                          <p className="text-xs mt-1 text-green-600">
-                                            Besser: {moment.recommendation} - {moment.reasoning}
+                                      ))}
+                                      {parsedData.moments.length > 3 && (
+                                        <p className="text-xs text-gray-500 italic">
+                                          + {parsedData.moments.length - 3} weitere wichtige Momente
+                                        </p>
+                                      )}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          } catch (parseError) {
+                            console.error('First parse attempt failed:', parseError);
+                            
+                            // Versuche das JSON zu reparieren
+                            const fixedJson = sanitizeJsonString(jsonContent);
+                            console.log('Attempting with fixed JSON:', fixedJson.substring(0, 100) + '...');
+                            
+                            try {
+                              const parsedData = JSON.parse(fixedJson);
+                              console.log('Successfully parsed fixed JSON');
+                              
+                              return (
+                                <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                                  <p className="mb-4">{parsedData.summary}</p>
+                                  
+                                  {parsedData.moments && parsedData.moments.length > 0 && (
+                                    <>
+                                      <h3 className="font-medium mt-4 mb-2">Wichtige Momente</h3>
+                                      <div className="space-y-3">
+                                        {parsedData.moments.slice(0, 3).map((moment: any, index: number) => (
+                                          <div key={index} className="p-2 bg-gray-50 rounded">
+                                            <div className="font-medium">
+                                              Zug {Math.floor(moment.ply/2) + (moment.ply % 2 === 0 ? 0 : 0.5)}: 
+                                              <span className={moment.color === 'white' ? 'text-blue-600' : 'text-gray-800'}>
+                                                {moment.move}
+                                              </span>
+                                            </div>
+                                            <p className="text-xs mt-1">{moment.comment}</p>
+                                            {moment.recommendation && (
+                                              <p className="text-xs mt-1 text-green-600">
+                                                Besser: {moment.recommendation} - {moment.reasoning}
+                                              </p>
+                                            )}
+                                          </div>
+                                        ))}
+                                        {parsedData.moments.length > 3 && (
+                                          <p className="text-xs text-gray-500 italic">
+                                            + {parsedData.moments.length - 3} weitere wichtige Momente
                                           </p>
                                         )}
                                       </div>
-                                    ))}
-                                    {parsedData.moments.length > 3 && (
-                                      <p className="text-xs text-gray-500 italic">
-                                        + {parsedData.moments.length - 3} weitere wichtige Momente
-                                      </p>
-                                    )}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            } catch (fixError) {
+                              console.error('Failed to fix JSON:', fixError);
+                              // Weiterfall zum Fallback unten
+                            }
+                          }
                         }
                       } catch (e) {
-                        console.error('Error parsing analysis JSON:', e);
+                        console.error('Error extracting or parsing analysis JSON:', e);
                       }
                       
                       // Fallback: Zeige den Rohtext an
