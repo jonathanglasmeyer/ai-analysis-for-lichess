@@ -55,18 +55,41 @@ export function MoveList({ history, onMoveClick, analysisMoments = [] }: MoveLis
   
   // Wir verfolgen keinen ausgewählten Moment mehr, da alle Details inline angezeigt werden
   
-  // Scroll to current move when currentMoveIndex changes
+  // Scroll to current move when currentMoveIndex changes, ensuring 2 full moves remain visible
   useEffect(() => {
     if (scrollContainerRef.current) {
       if (currentMoveIndex === -1) {
         // Scroll to start on initial position
         scrollContainerRef.current.scrollTop = 0;
       } else if (currentMoveRef.current) {
-        // Scroll to current move
-        currentMoveRef.current.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest' 
-        });
+        // Berechne, bei welchem Vollzug wir sind
+        const currentFullMove = Math.floor(currentMoveIndex / 2);
+        
+        // Finde alle Elemente für die nächsten Vollzüge
+        const moveElements = Array.from(scrollContainerRef.current.querySelectorAll('[data-fullmove]'))
+          .filter(el => {
+            const fullMove = parseInt(el.getAttribute('data-fullmove') || '0', 10);
+            // Berhalte nur Elemente, die den aktuellen und die nächsten 2 Vollzüge enthalten
+            return fullMove >= currentFullMove && fullMove <= currentFullMove + 2;
+          });
+        
+        // Scrolle, aber mit angepasstem Block-Verhalten
+        if (moveElements.length > 0) {
+          // Nimm das erste Element für das Scrollen
+          const targetElement = moveElements[0];
+          targetElement.scrollIntoView({
+            behavior: 'smooth',
+            // 'start' stellt sicher, dass das Element oben im sichtbaren Bereich erscheint
+            // und genügend Platz für weitere Elemente darunter lässt
+            block: 'start'
+          });
+        } else {
+          // Fallback: Scroll direkt zum aktuellen Zug
+          currentMoveRef.current.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          });
+        }
       }
     }
   }, [currentMoveIndex]);
@@ -106,7 +129,7 @@ export function MoveList({ history, onMoveClick, analysisMoments = [] }: MoveLis
       
       // Haupt-Zugelement
       elements.push(
-        <div key={`move-${i}`}>
+        <div key={`move-${i}`} data-fullmove={moveNumber}>
           {/* Zug-Zeile */}
           <div className={`flex items-center h-7 text-sm ${Math.floor(i / 2) % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}> 
             {/* Move number */}
