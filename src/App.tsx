@@ -13,6 +13,57 @@ import { initAuth } from './services/lichessApi';
  * Main application component that integrates the chess board, move history, and PGN import
  * Inspired by lichess.org analysis view
  */
+// Funktion, die Zugverweise im Format [16. Qg6] oder [21... Qh4+] in klickbare Links umwandelt
+const formatSummaryWithMoveLinks = (summary: string, goToMoveFunc: (index: number) => void) => {
+  if (!summary) return null;
+  
+  // Regex, um Zugverweise im Format [16. Qg6] oder [21... Qh4+] zu finden
+  const movePattern = /\[(\d+)(\.{3}|\.)[\s]?([^\]]+)\]/g;
+  
+  // Teile den Text in Segmente auf (Text und Zugverweise)
+  const segments: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = movePattern.exec(summary)) !== null) {
+    // Text vor dem Zugverweis hinzufügen
+    if (match.index > lastIndex) {
+      segments.push(summary.substring(lastIndex, match.index));
+    }
+    
+    // Extrahiere die Zugkomponenten
+    const moveNumber = parseInt(match[1], 10);
+    const isBlackMove = match[2] === '...' || match[2] === '…'; // Berücksichtige verschiedene Ellipsen
+    const moveSan = match[3].trim();
+    
+    // Berechne den Zugindex für goToMove (halbe Züge, 0-basiert)
+    // Für weiße Züge: (moveNumber - 1) * 2
+    // Für schwarze Züge: (moveNumber - 1) * 2 + 1
+    const moveIndex = (moveNumber - 1) * 2 + (isBlackMove ? 1 : 0);
+    
+    // Füge den formatierten Link hinzu
+    segments.push(
+      <button 
+        key={match.index}
+        onClick={() => goToMoveFunc(moveIndex)}
+        className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-600 transition-colors cursor-pointer"
+        title={`Springe zu Zug ${moveNumber}${isBlackMove ? '...' : '.'} ${moveSan}`}
+      >
+        {moveNumber}{isBlackMove ? '...' : '.'} {moveSan}
+      </button>
+    );
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Restlichen Text hinzufügen
+  if (lastIndex < summary.length) {
+    segments.push(summary.substring(lastIndex));
+  }
+  
+  return segments;
+};
+
 function App() {
   // State für Analyseergebnisse
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -146,7 +197,7 @@ function App() {
                     <h2 className="text-xs font-medium text-gray-700">Spielanalyse</h2>
                     <AnalyzeButton exportPgn={exportPgn} pgn={exportPgn()} />
                   </div>
-                  <div className="p-3 max-h-[250px] overflow-y-auto">
+                  <div className="p-3 max-h-[350px] overflow-y-auto">
                     {/* Fehleranzeige */}
                     {analysisResult && !analysisResult.ok && (
                       <div className="text-sm text-red-500 mb-4">
@@ -195,7 +246,9 @@ function App() {
                             const parsedData = JSON.parse(jsonContent);
                             return (
                               <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                                <p className="mb-4">{parsedData.summary}</p>
+                                <p className="mb-4">
+                                  {formatSummaryWithMoveLinks(parsedData.summary, goToMove)}
+                                </p>
                                 
                                 {parsedData.moments && parsedData.moments.length > 0 && (
                                   <>
@@ -298,7 +351,7 @@ function App() {
                     <h2 className="text-xs font-medium text-gray-700">Move History</h2>
                     <CopyPgnButton exportPgn={exportPgn} />
                   </div>
-                  <div className="h-[calc(100vh-385px)] overflow-hidden relative">
+                  <div className="h-[calc(100vh-485px)] overflow-hidden relative">
                     <MoveList history={history} onMoveClick={goToMove} />
                   </div>
                 </div>

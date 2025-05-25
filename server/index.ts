@@ -355,11 +355,16 @@ app.post('/analyze', async (c) => {
       }
       
 
-1. "summary": Eine kurze Gesamteinschätzung (2–4 Absätze), in der du erklärst:
+1. "summary": Eine Gesamteinschätzung , in der du erklärst:
    - Wer wann die Initiative hatte
    - Was strategisch interessant war
    - Wo der entscheidende Wendepunkt der Partie lag
    - Was der Spieler aus der Partie lernen kann
+   	•	Verwende bildhafte und anschauliche Sprache, um die Dynamik und Dramatik der Partie einzufangen. Analysiere, warum bestimmte Züge die Initiative verschieben, und erläutere kurz die wichtigsten taktischen und strategischen Motive, die dabei eine Rolle spielen.
+	•	Gib konkrete Beispiele für Varianten oder Motive, wenn sie für das Verständnis wesentlich sind.
+	•	Stelle im Fazit klar heraus, welche konkreten Lektionen aus der Partie für ähnliche Situationen abgeleitet werden können. Formuliere einprägsam und greifbar.
+	•	Wenn möglich, arbeite heraus, wie sich die psychologische Situation der Spieler während der Partie gewandelt haben könnte.
+
    Innerhalb der Summary sollst du Referenzen auf Züge immer eindeutig identifizieren in folgender Form, z.B. [14. Nf3], oder bei schwarz [14... Nf6]. 
 
 2. "moments": Eine Liste der **5 bis 10 wichtigsten oder lehrreichsten Züge** (kritische Momente), jeweils mit:
@@ -381,7 +386,9 @@ ${normalizedPgn}`;
         model: "claude-sonnet-4-20250514",
         max_tokens: 10000,
         temperature: 0.5,
-        system: "Du bist ein erfahrener Schachexperte und Trainer, der klare, präzise Analysen schreibt.",
+        system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. 
+        Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. 
+        Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen.`,
         messages: [
           { role: "user", content: prompt }
         ]
