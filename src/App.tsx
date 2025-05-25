@@ -250,34 +250,7 @@ function App() {
                                   {formatSummaryWithMoveLinks(parsedData.summary, goToMove)}
                                 </p>
                                 
-                                {parsedData.moments && parsedData.moments.length > 0 && (
-                                  <>
-                                    <h3 className="font-medium mt-4 mb-2">Wichtige Momente</h3>
-                                    <div className="space-y-3">
-                                      {parsedData.moments.slice(0, 3).map((moment: any, index: number) => (
-                                        <div key={index} className="p-2 bg-gray-50 rounded">
-                                          <div className="font-medium">
-                                            Zug {Math.floor(moment.ply/2) + (moment.ply % 2 === 0 ? 0 : 0.5)}: 
-                                            <span className={moment.color === 'white' ? 'text-blue-600' : 'text-gray-800'}>
-                                              {moment.move}
-                                            </span>
-                                          </div>
-                                          <p className="text-xs mt-1">{moment.comment}</p>
-                                          {moment.recommendation && (
-                                            <p className="text-xs mt-1 text-green-600">
-                                              Besser: {moment.recommendation} - {moment.reasoning}
-                                            </p>
-                                          )}
-                                        </div>
-                                      ))}
-                                      {parsedData.moments.length > 3 && (
-                                        <p className="text-xs text-gray-500 italic">
-                                          + {parsedData.moments.length - 3} weitere wichtige Momente
-                                        </p>
-                                      )}
-                                    </div>
-                                  </>
-                                )}
+                                {/* Wichtige Momente werden jetzt in der Move History angezeigt */}
                               </div>
                             );
                           } catch (parseError) {
@@ -352,7 +325,24 @@ function App() {
                     <CopyPgnButton exportPgn={exportPgn} />
                   </div>
                   <div className="h-[calc(100vh-485px)] overflow-hidden relative">
-                    <MoveList history={history} onMoveClick={goToMove} />
+                    <MoveList 
+                      history={history} 
+                      onMoveClick={goToMove} 
+                      analysisMoments={
+                        analysisResult && analysisResult.ok && (() => {
+                          try {
+                            const jsonMatch = analysisResult.summary.match(/```json\n([\s\S]*?)\n```/);
+                            if (jsonMatch && jsonMatch[1]) {
+                              const parsedData = JSON.parse(jsonMatch[1]);
+                              return parsedData.moments || [];
+                            }
+                          } catch (e) {
+                            console.error('Error extracting moments for MoveList:', e);
+                          }
+                          return [];
+                        })()
+                      }
+                    />
                   </div>
                 </div>
               </div>
