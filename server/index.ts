@@ -55,13 +55,16 @@ function getCacheFilename(pgn: string): string {
 
 // Lade einen Cache-Eintrag
 async function loadFromCache(pgn: string): Promise<CacheEntry | null> {
-  const cacheFile = getCacheFilename(pgn);
+  const cacheFile = path.join(CACHE_DIR, getCacheFilename(pgn));
+  console.log(`Versuche Cache zu laden von: ${cacheFile}`);
   
   try {
     const data = await fs.readFile(cacheFile, 'utf-8');
+    console.log('Cache-Eintrag gefunden!');
     return JSON.parse(data) as CacheEntry;
   } catch (error) {
     // Datei existiert nicht oder kann nicht gelesen werden
+    console.log('Kein Cache-Eintrag gefunden:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
