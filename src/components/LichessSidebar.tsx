@@ -218,14 +218,24 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
     return type;
   };
   
-  // Hilfsfunktion zur Formatierung des Ergebnisses
+  // Hilfsfunktion zur Formatierung des Ergebnisses mit Gewinnart
   const getResultText = (status: string, winner?: 'white' | 'black' | null) => {
     if (status === 'draw') return 'Remis';
-    if (status === 'mate' || status === 'resign' || status === 'timeout') {
-      if (winner === 'white') return 'Weiß gewinnt';
-      if (winner === 'black') return 'Schwarz gewinnt';
-    }
-    return status;
+    
+    let winnerText = '';
+    if (winner === 'white') winnerText = 'Weiß gewinnt';
+    else if (winner === 'black') winnerText = 'Schwarz gewinnt';
+    else return status;
+    
+    // Füge die Art des Gewinns hinzu
+    if (status === 'mate') return `${winnerText} durch Matt`;
+    if (status === 'resign') return `${winnerText} durch Aufgabe`;
+    if (status === 'timeout') return `${winnerText} durch Zeitüberschreitung`;
+    if (status === 'stalemate') return 'Patt';
+    if (status === 'outoftime') return `${winnerText} durch Zeitüberschreitung`;
+    if (status === 'cheat') return `${winnerText} (Regelverstoß)`;
+    
+    return winnerText;
   };
   
   // Hilfsfunktion zur Formatierung des Datums
@@ -357,62 +367,59 @@ export function LichessSidebar({ onSelectGame }: LichessSidebarProps) {
               className={`p-3 rounded cursor-pointer border border-transparent hover:border-gray-200 hover:bg-gray-50 transition-all duration-150 ${selectedGameId === game.id ? 'bg-blue-50 border-blue-100' : ''}`}
               onClick={() => handleSelectGame(game)}
             >
-              <div className="flex justify-between items-start mb-2">
-                {/* Spielerinformationen */}
-                <div className="flex-1">
+              {/* Spielerinformationen */}
+              <div className="flex-1 mb-2">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <span className="inline-block w-2 h-2 bg-white border border-gray-300 mr-1.5 rounded-sm"></span>
-                    <span className="text-sm text-gray-800">{game.players?.white?.user?.name || 'Weiß'}</span>
+                    <span className={`text-sm text-gray-800 ${game.winner === 'white' ? 'font-semibold' : ''}`}>{game.players?.white?.user?.name || 'Weiß'}</span>
                     {game.players?.white?.rating && (
                       <span className="ml-1 text-gray-400 text-xs">{game.players.white.rating}</span>
                     )}
                   </div>
-                  <div className="flex items-center mt-1.5">
-                    <span className="inline-block w-2 h-2 bg-gray-800 border border-gray-300 mr-1.5 rounded-sm"></span>
-                    <span className="text-sm text-gray-800">{game.players?.black?.user?.name || 'Schwarz'}</span>
-                    {game.players?.black?.rating && (
-                      <span className="ml-1 text-gray-400 text-xs">{game.players.black.rating}</span>
-                    )}
-                  </div>
+                  <span className="text-xs text-gray-400">{formatDate(game.createdAt)}</span>
                 </div>
-                
-                {/* Badge und Datum */}
-               
+                <div className="flex items-center mt-0.5">
+                  <span className="inline-block w-2 h-2 bg-gray-800 border border-gray-300 mr-1.5 rounded-sm"></span>
+                  <span className={`text-sm text-gray-800 ${game.winner === 'black' ? 'font-semibold' : ''}`}>{game.players?.black?.user?.name || 'Schwarz'}</span>
+                  {game.players?.black?.rating && (
+                    <span className="ml-1 text-gray-400 text-xs">{game.players.black.rating}</span>
+                  )}
+                </div>
               </div>
               
               {/* Ergebnis und Anzahl der Züge */}
               <div className="mt-1 text-xs flex justify-between items-center">
                 <div className="text-gray-500">
-                  {getResultText(game.status, game.winner)} • 
+                  {getResultText(game.status, game.winner)} •
                   {game.moves ? (() => {
                     // Wenn moves ein String ist, zähle die Anzahl der Vollzüge basierend auf Leerzeichen
                     if (typeof game.moves === 'string') {
                       // Zähle die Anzahl der Leerzeichen + 1 und teile durch 2 für Vollzüge
                       const movesStr = game.moves as string;
                       const movesCount = (movesStr.split(' ').length) / 2;
-                      return `${Math.ceil(movesCount)} Züge`;
+                      return `  ${Math.ceil(movesCount)} Züge`;
                     }
                     // Wenn moves ein Array ist, berechne die Vollzüge als Länge / 2
                     if (Array.isArray(game.moves)) {
-                      return `${Math.ceil(game.moves.length / 2)} Züge`;
+                      return ` ${Math.ceil(game.moves.length / 2)} Züge`;
                     }
                     // Fallback
                     return '? Züge';
                   })() : 'Keine Züge'}
                 </div>
-                <span className="text-gray-400">{formatDate(game.createdAt)}</span>
               </div>
             </div>
           ))}
-        
-        {loading && (
-          <div className="text-center py-2 mt-2">
-            <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-900 mr-2"></div>
-            Lädt weitere Partien...
-          </div>
-        )}
-      </div>
-    )}
-  </div>
+          
+          {loading && (
+            <div className="text-center py-2 mt-2">
+              <div className="inline-block animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-gray-900 mr-2"></div>
+              Lädt weitere Partien...
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
