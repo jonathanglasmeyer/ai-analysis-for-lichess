@@ -41,11 +41,39 @@ export function MoveList({ history, onMoveClick, analysisMoments = [] }: MoveLis
     
     const map: Record<number, AnalysisMoment> = {};
     // Stelle sicher, dass analysisMoments ein Array ist
-    if (analysisMoments && Array.isArray(analysisMoments)) {
+    if (analysisMoments && Array.isArray(analysisMoments) && moves.length > 0) {
+      console.log('Verifying and fixing ply values in analysis moments...');
+      
       analysisMoments.forEach(moment => {
-        map[moment.ply] = moment;
+        // Sanity check: Prüfe, ob der Zug und die Farbe mit dem entsprechenden ply übereinstimmen
+        let correctedPly = moment.ply;
+        let moveFound = false;
+        
+        // Suche nach dem Zug in der Zugliste basierend auf san und color
+        for (let i = 0; i < moves.length; i++) {
+          const moveColor = i % 2 === 0 ? 'white' : 'black';
+          const correctPly = i + 1; // ply ist 1-basiert
+          
+          if (moves[i].san === moment.move && moveColor === moment.color) {
+            if (correctedPly !== correctPly) {
+              console.log(`Korrigiere ply von ${moment.move} (${moment.color}): ${correctedPly} -> ${correctPly}`);
+              correctedPly = correctPly;
+            }
+            moveFound = true;
+            break;
+          }
+        }
+        
+        if (!moveFound) {
+          console.warn(`Zug ${moment.move} (${moment.color}) nicht in der Zugliste gefunden!`);
+        }
+        
+        // Aktualisiere die Map mit dem korrigierten ply-Wert
+        const fixedMoment = { ...moment, ply: correctedPly };
+        map[correctedPly] = fixedMoment;
       });
-      console.log('Mapped moments, keys:', Object.keys(map));
+      
+      console.log('Mapped moments after verification, keys:', Object.keys(map));
     }
     
     // Update des State löst Re-Rendering aus
