@@ -2,9 +2,11 @@
  * Styles for the ChessGPT Lichess Integration
  */
 
-/* AI Analysis Panel */
+/* AI Analysis Panel - NUR für unser eigenes Panel */
 .ai-analysis-panel {
-  
+  height: 100%;
+  overflow: auto;
+  padding: 10px;
 }
 
 /* Loading indicator */

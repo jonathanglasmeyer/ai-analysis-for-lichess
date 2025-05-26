@@ -197,51 +197,142 @@ async function addAiAnalysisTab() {
       }
     });
     
-    // Auch die anderen Tabs mit Click-Handlern versehen, um zurück zu wechseln
-    allTabs.forEach(tab => {
-      // Nur existierende Tabs, nicht unseren AI-Tab
-      if (!tab.classList.contains('ai-analysis')) {
-        const originalClickHandler = tab.onclick;
-        const tabText = tab.textContent.trim();
+    // Einfache Tab-Funktionalität - MINIMAL, nur für unseren eigenen Tab
+    // Nichts anderes verändern oder manipulieren
+    
+    // VERBESSERTE IMPLEMENTIERUNG: Universeller Tab-Handler
+    
+    // Funktion, die ein Panel korrekt aktiviert und konfiguriert
+    function activatePanel(panel, tabType) {
+      // Panel sichtbar machen
+      panel.style.display = 'block';
+      
+      // Panel-Typ spezifische Anpassungen
+      if (tabType === 'note') {
+        console.log('Configuring notes panel');
+        // Fix für das Notes-Panel
+        panel.style.height = '100%';
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
         
-        tab.addEventListener('click', (event) => {
-          // AI-Tab deaktivieren
-          aiTab.classList.remove('mchat__tab-active');
+        // Textarea finden und konfigurieren
+        const textarea = panel.querySelector('textarea.mchat__note');
+        if (textarea) {
+          console.log('Configuring notes textarea');
           
-          // AI-Content ausblenden
-          aiContent.style.display = 'none';
+          // Sicherstellen, dass die Textarea korrekt dargestellt wird
+          textarea.style.flexGrow = '1';
+          textarea.style.height = '100%';
+          textarea.style.width = '100%';
           
-          // Finde das zugehörige Panel für diesen Tab
-          let targetPanel = null;
-          const tabType = tab.getAttribute('data-tab') || 
-                         Array.from(tab.classList).find(cls => cls !== 'mchat__tab' && cls !== 'mchat__tab-active');
-          
-          if (tabType) {
-            // Suche zuerst nach data-tab Attribut
-            targetPanel = mchatElement.querySelector(`.mchat__content[data-tab="${tabType}"]`);
-            
-            // Dann nach Klasse
-            if (!targetPanel) {
-              targetPanel = mchatElement.querySelector(`.mchat__content.${tabType}`);
-            }
-          }
-          
-          // Panel aktivieren, wenn gefunden
-          if (targetPanel) {
-            // Aktivieren des Panels
-            targetPanel.style.display = 'block';
-            
-            // Aktivieren des Tabs
-            tab.classList.add('mchat__tab-active');
-          }
-          
-          // Original-Handler aufrufen, falls vorhanden
-          if (originalClickHandler) {
-            originalClickHandler(event);
-          }
-        });
+          // Lichess Lifecycle simulieren
+          setTimeout(() => {
+            textarea.blur();
+            textarea.click();
+            textarea.focus();
+          }, 10);
+        }
+      } 
+      else if (tabType === 'chat' || tabType === 'discussion') {
+        console.log('Configuring chat panel');
+        // Fix für das Chat-Panel
+        panel.style.height = '100%';
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        
+        // Chat-Container und Eingabefeld finden
+        const chatLines = panel.querySelector('.mchat__messages');
+        const chatInput = panel.querySelector('.mchat__say');
+        
+        if (chatLines) {
+          chatLines.style.display = 'block';
+          chatLines.style.flexGrow = '1';
+          chatLines.style.overflow = 'auto';
+        }
+        
+        if (chatInput) {
+          chatInput.style.display = 'flex';
+        }
       }
+    }
+    
+    // Funktion zum Aktivieren des AI-Tabs
+    function activateAiTab() {
+      console.log('Activating AI Tab');
+      
+      // Alle Tabs deaktivieren
+      const tabs = mchatElement.querySelectorAll('.mchat__tab');
+      tabs.forEach(tab => tab.classList.remove('mchat__tab-active'));
+      
+      // Alle Panels ausblenden
+      const panels = mchatElement.querySelectorAll('.mchat__content');
+      panels.forEach(panel => panel.style.display = 'none');
+      
+      // AI-Tab aktivieren
+      aiTab.classList.add('mchat__tab-active');
+      aiContent.style.display = 'block';
+    }
+    
+    // Event-Listeners für die Tabs
+    allTabs.forEach(tab => {
+      tab.addEventListener('click', function(event) {
+        const isAiTab = tab.classList.contains('ai-analysis');
+        console.log(`Tab clicked: ${tab.textContent.trim()}, is AI tab: ${isAiTab}`);
+        
+        if (isAiTab) {
+          // AI-Tab wurde geklickt - wird in seinem eigenen Handler behandelt
+          return;
+        }
+        
+        // Original-Tab wurde geklickt
+        // 1. Deaktiviere den AI-Tab
+        aiTab.classList.remove('mchat__tab-active');
+        aiContent.style.display = 'none';
+        
+        // 2. Bestimme den Tab-Typ
+        const tabType = tab.getAttribute('data-tab') || 
+                       Array.from(tab.classList).find(cls => 
+                         cls !== 'mchat__tab' && cls !== 'mchat__tab-active');
+        
+        if (!tabType) {
+          console.log('Could not determine tab type');
+          return;
+        }
+        
+        console.log(`Original tab type: ${tabType}`);
+        
+        // 3. Finde das entsprechende Panel
+        const targetPanel = mchatElement.querySelector(`.mchat__content[data-tab="${tabType}"]`) || 
+                          mchatElement.querySelector(`.mchat__content.${tabType}`);
+        
+        if (targetPanel) {
+          // Aktiviere das Panel korrekt
+          activatePanel(targetPanel, tabType);
+        }
+      });
     });
+    
+    // Für Debugging-Zwecke: Zeige aktive Tabs
+    document.addEventListener('click', function(event) {
+      if (event.target.closest('.mchat__tab')) {
+        setTimeout(() => {
+          // Prüfe, welche Tabs aktiv sind
+          const activeTabs = document.querySelectorAll('.mchat__tab-active');
+          console.log('Active tabs after click:', activeTabs.length);
+          activeTabs.forEach(tab => {
+            console.log(`- ${tab.textContent.trim()}`);
+          });
+          
+          // Prüfe, welche Panels sichtbar sind
+          const visiblePanels = Array.from(mchatElement.querySelectorAll('.mchat__content'))
+            .filter(p => p.style.display !== 'none');
+          console.log('Visible panels:', visiblePanels.length);
+          visiblePanels.forEach(panel => {
+            console.log(`- ${panel.className}`);
+          });
+        }, 50);
+      }
+    }, true);
     
     // Funktion zum Extrahieren des PGN aus dem Lichess DOM
     function extractPgn() {
@@ -573,27 +664,40 @@ async function addAiAnalysisTab() {
       console.error('Could not find parent mchat element');
     }
     
-    // Add click event to tab
-    aiTab.addEventListener('click', () => {
-      // Deaktiviere alle Tabs und verstecke alle Panels
-      const tabs = tabsContainer.querySelectorAll('.mchat__tab');
-      tabs.forEach(tab => {
-        tab.classList.remove('mchat__tab-active');
-      });
+    // Add click event to tab mit unserem verbesserten Tab-Handler
+    aiTab.addEventListener('click', async () => {
+      // Aktiviere unseren Tab und deaktiviere die anderen mit der neuen Funktion
+      activateAiTab();
       
-      // Verstecke alle Content-Panels
-      if (mchatElement) {
-        const contentPanels = mchatElement.querySelectorAll('.mchat__content');
-        contentPanels.forEach(panel => {
-          panel.style.display = 'none';
-        });
+      // Zeige sofort einen neutralen Ladeindikator an
+      aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
+      
+      // Verwende das vorab geladene Ergebnis, falls verfügbar
+      if (cachedResult) {
+        console.log('Using pre-loaded cache result');
+        if (cachedResult.error) {
+          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
+        } else if (cachedResult.ok) {
+          displayAnalysisResult(cachedResult, aiContent);
+        } else {
+          aiContent.innerHTML = '';
+          aiContent.appendChild(analyzeButton);
+        }
+        return;
       }
       
-      // Aktiviere unseren Tab und Panel
-      aiTab.classList.add('mchat__tab-active');
-      aiContent.style.display = 'block';
+      // Wenn kein vorab geladenes Ergebnis verfügbar ist, prüfe jetzt
+      const result = await checkCacheStatus();
+      if (!result) return; // Falls die Prüfung bereits läuft
       
-      console.log('Activated AI Analysis tab');
+      if (result.error) {
+        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
+      } else if (result.ok) {
+        displayAnalysisResult(result, aiContent);
+      } else {
+        aiContent.innerHTML = '';
+        aiContent.appendChild(analyzeButton);
+      }
     });
     
     console.log('AI Analysis tab integration complete');
