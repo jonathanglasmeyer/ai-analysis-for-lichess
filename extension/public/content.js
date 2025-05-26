@@ -116,8 +116,40 @@ async function addAiAnalysisTab() {
     const allContentPanels = mchatElement.querySelectorAll('.mchat__content');
     console.log('Found content panels:', allContentPanels.length);
     
+    // Globale Variable für den Cache-Status
+    let cachedResult = null;
+    let isCacheCheckInProgress = false;
+    
+    // Hilfsfunktion zum Prüfen des Cache-Status - wir rufen sie proaktiv auf
+    function checkCacheStatus() {
+      if (isCacheCheckInProgress) return Promise.resolve(null);
+      
+      isCacheCheckInProgress = true;
+      return new Promise((resolve) => {
+        const pgn = extractPgn();
+        if (!pgn) {
+          isCacheCheckInProgress = false;
+          resolve({ error: 'Fehler: PGN konnte nicht extrahiert werden' });
+          return;
+        }
+        
+        chrome.runtime.sendMessage({ type: 'CHECK_CACHE', pgn }, response => {
+          isCacheCheckInProgress = false;
+          resolve(response || { ok: false });
+        });
+      });
+    }
+    
+    // Cache bereits im Hintergrund prüfen
+    setTimeout(() => {
+      checkCacheStatus().then(result => {
+        cachedResult = result;
+        console.log('Cache pre-loaded:', cachedResult ? 'SUCCESS' : 'FAILED');
+      });
+    }, 1000);
+    
     // Tab-Click-Handler hinzufügen
-    aiTab.addEventListener('click', (event) => {
+    aiTab.addEventListener('click', async (event) => {
       event.preventDefault();
       
       // Alle Tabs deaktivieren
@@ -129,6 +161,39 @@ async function addAiAnalysisTab() {
       allContentPanels.forEach(panel => panel.style.display = 'none');
       // AI-Content anzeigen
       aiContent.style.display = 'block';
+      
+      // Zeige sofort einen neutralen Ladeindikator an, egal ob Cache-Hit oder Miss
+      aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
+      
+      // Verwende das vorab geladene Ergebnis, falls verfügbar
+      if (cachedResult) {
+        if (cachedResult.error) {
+          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
+        } else if (cachedResult.ok) {
+          // Cache-Hit: Zeige direkt die Analyse an
+          displayAnalysisResult(cachedResult, aiContent);
+        } else {
+          // Cache-Miss: Zeige Analyse-Button an
+          aiContent.innerHTML = '';
+          aiContent.appendChild(analyzeButton);
+        }
+        return;
+      }
+      
+      // Wenn kein vorab geladenes Ergebnis verfügbar ist, prüfe jetzt
+      const result = await checkCacheStatus();
+      if (!result) return; // Falls die Prüfung bereits läuft
+      
+      if (result.error) {
+        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
+      } else if (result.ok) {
+        // Cache-Hit: Zeige direkt die Analyse an
+        displayAnalysisResult(result, aiContent);
+      } else {
+        // Cache-Miss: Zeige Analyse-Button an
+        aiContent.innerHTML = '';
+        aiContent.appendChild(analyzeButton);
+      }
     });
     
     // Auch die anderen Tabs mit Click-Handlern versehen, um zurück zu wechseln
@@ -229,13 +294,88 @@ async function addAiAnalysisTab() {
       }
     });
     
+    // Hilfsfunktion zur Normalisierung der Analysestruktur aus verschiedenen Quellen
+    function normalizeAnalysisData(response) {
+      // Einheitliche Datenstruktur für Analysen
+      const normalized = {
+        summary: '',
+        moments: []
+      };
+      
+      // Logge die Response-Struktur zur Analyse
+      console.log('Response to normalize:', response);
+      
+      // Fall 1: Cache-Hit mit originalResponse
+      if (response?.originalResponse?.analysis) {
+        normalized.summary = response.originalResponse.analysis.summary || '';
+        normalized.moments = response.originalResponse.analysis.moments || [];
+        console.log('Normalized from originalResponse.analysis');
+      }
+      // Fall 2: Cache-Hit mit direkter Struktur
+      else if (response?.summary) {
+        normalized.summary = response.summary || '';
+        normalized.moments = response.moments || [];
+        console.log('Normalized from direct response');
+      }
+      // Fall 3: Frische Analyse mit data-Struktur
+      else if (response?.data) {
+        normalized.summary = response.data.summary || '';
+        normalized.moments = response.data.moments || [];
+        console.log('Normalized from response.data');
+      }
+      // Fall 4: Direkte Analyse-Objekt
+      else if (response?.analysis) {
+        normalized.summary = response.analysis.summary || '';
+        normalized.moments = response.analysis.moments || [];
+        console.log('Normalized from response.analysis');
+      }
+      
+      // Wenn die Summary Markdown-Code-Blöcke enthält, parse sie
+      if (normalized.summary && normalized.summary.includes('```')) {
+        try {
+          // Entferne Code-Block-Markierungen (```json und ```)
+          const cleanedText = normalized.summary.replace(/```json\n|```/g, '');
+          const jsonObject = JSON.parse(cleanedText.trim());
+          
+          // Wenn das JSON-Objekt eine summary hat, verwende sie
+          if (jsonObject.summary) {
+            normalized.summary = jsonObject.summary;
+            console.log('Parsed summary from JSON code block');
+            
+            // Auch moments übernehmen, wenn vorhanden
+            if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
+              normalized.moments = jsonObject.moments;
+              console.log('Parsed moments from JSON code block');
+            }
+          }
+        } catch (e) {
+          console.log('Failed to parse JSON from code block, using raw summary:', e);
+          // Einfache Markdown-Formatierung anwenden
+          normalized.summary = normalized.summary
+            .replace(/```json\n|```/g, '')
+            .replace(/\n\n/g, '<br><br>')
+            .replace(/\n- /g, '<br>• ');
+        }
+      }
+      
+      console.log('Normalized data:', {
+        summary: normalized.summary.substring(0, 50) + '...',
+        moments: normalized.moments.length
+      });
+      
+      return normalized;
+    }
+    
     // Hilfsfunktion zum Anzeigen des Analyseergebnisses
     function displayAnalysisResult(result, container) {
+      // Daten aus verschiedenen Formaten normalisieren
+      const normalizedData = normalizeAnalysisData(result);
+      
       // Analyse-Zusammenfassung anzeigen
       container.innerHTML = `
         <div style="padding: 20px;">
           <h3 style="margin-top: 0;">Analyse-Zusammenfassung</h3>
-          <p style="white-space: pre-line;">${result?.summary || 'Keine Zusammenfassung verfügbar'}</p>
+          <p style="white-space: pre-line;">${normalizedData.summary || 'Keine Zusammenfassung verfügbar'}</p>
           
           <div class="ai-moments-info" style="margin-top: 15px; font-size: 0.9em; color: #666;">
             <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
@@ -243,9 +383,12 @@ async function addAiAnalysisTab() {
         </div>
       `;
       
-      // Highlights in der Zugliste implementieren
-      if (result && result.moments && Array.isArray(result.moments)) {
-        highlightMovesInMoveList(result.moments);
+      // Highlights in der Zugliste implementieren, wenn Momente vorhanden sind
+      if (normalizedData.moments && normalizedData.moments.length > 0) {
+        console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
+        highlightMovesInMoveList(normalizedData.moments);
+      } else {
+        console.log('No moments to highlight');
       }
     }
     

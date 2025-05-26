@@ -7,11 +7,85 @@ console.log('ChessGPT background script initialized');
 // Server endpoint for chess analysis - verwende den bestehenden Server auf Port 3001
 const API_ENDPOINT = 'http://localhost:3001/analyze';
 
+// Server endpoint für cache check
+const CACHE_CHECK_ENDPOINT = 'http://localhost:3001/check-cache';
+
+// Funktion zum Überprüfen des Cache-Status für ein PGN
+async function checkCacheForPgn(pgn) {
+  console.log('Checking cache for PGN...');
+  
+  try {
+    const response = await fetch(CACHE_CHECK_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ pgn }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Cache check failed:', error);
+    return { inCache: false, error: error.message };
+  }
+}
+
 // Listen for messages from content script
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log('Received message:', request);
   
-  if (request.type === 'ANALYZE_PGN') {
+  if (request.type === 'CHECK_CACHE') {
+    console.log('Checking cache for PGN:', request.pgn.substring(0, 100) + '...');
+    
+    // Extrahiere PGN oder Game ID
+    let pgnData = request.pgn;
+    
+    // Falls wir nur eine Game ID haben, konvertiere sie in ein Format, das unser Server versteht
+    if (pgnData.startsWith('Game ID:')) {
+      const gameId = pgnData.match(/Game ID: ([^\s]+)/)[1];
+      pgnData = gameId; // Server kann mit der ID arbeiten
+    }
+    
+    // Prüfe den Cache-Status asynchron
+    checkCacheForPgn(pgnData)
+      .then(cacheResult => {
+        console.log('Cache check result:', cacheResult);
+        
+        // Formatiere die Antwort so, dass sie mit dem Content-Script übereinstimmt
+        // Content-Script erwartet response.ok, aber wir haben cacheResult.inCache
+        const formattedResponse = {
+          ok: cacheResult.inCache, // Übersetze inCache zu ok
+          
+          // Extrahiere die Summary aus der verschachtelten Struktur
+          summary: cacheResult.analysis?.summary || '',
+          
+          cached: true,
+          // Füge die Originaldaten hinzu, falls die Implementierung geändert wird
+          originalResponse: cacheResult
+        };
+        
+        console.log('Extracted summary from response:', formattedResponse.summary ? 'FOUND' : 'NOT FOUND');
+        
+        console.log('Sending formatted response to content script:', formattedResponse);
+        sendResponse(formattedResponse);
+      })
+      .catch(error => {
+        console.error('Cache check error:', error);
+        sendResponse({ 
+          ok: false, 
+          error: error.message || 'Unknown error',
+          cached: false
+        });
+      });
+    
+    // Wichtig: Return true, um anzuzeigen, dass wir asynchron antworten werden
+    return true;
+  }
+  else if (request.type === 'ANALYZE_PGN') {
     console.log('Analyzing PGN:', request.pgn.substring(0, 100) + '...');
     
     // Extrahiere PGN oder Game ID
