@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "ChessGPT Lichess Integration",
+  "version": "0.1.0",
+  "description": "Integriert KI-gestützte Schachanalysen direkt in Lichess",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://lichess.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://lichess.org/analysis*",
+        "https://lichess.org/*/white*",
+        "https://lichess.org/*/black*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}

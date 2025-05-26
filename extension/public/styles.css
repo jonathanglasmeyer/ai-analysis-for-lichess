@@ -1,0 +1,86 @@
+/**
+ * Styles for the ChessGPT Lichess Integration
+ */
+
+/* AI Analysis Panel */
+.ai-analysis-panel {
+  padding: 1rem;
+}
+
+/* Loading indicator */
+.ai-analysis-panel .loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  color: #666;
+}
+
+.ai-analysis-panel .loading::after {
+  content: '';
+  width: 20px;
+  height: 20px;
+  margin-left: 10px;
+  border: 2px solid #ccc;
+  border-top-color: #3893E8; /* Lichess blue */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error message */
+.ai-analysis-panel .error {
+  color: #c33;
+  padding: 1rem;
+  border-left: 3px solid #c33;
+  background-color: rgba(204, 51, 51, 0.1);
+}
+
+/* Analysis display */
+.ai-analysis-display {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ai-analysis-summary {
+  margin-bottom: 1rem;
+  white-space: pre-line;
+}
+
+/* Highlighted moves in move list */
+.tview2 move.ai-highlight {
+  background-color: rgba(56, 147, 232, 0.2);
+  border-radius: 3px;
+}
+
+.tview2 move.ai-highlight.active {
+  background-color: rgba(56, 147, 232, 0.4);
+}
+
+/* Button styling to match Lichess */
+.ai-analysis-panel .button {
+  display: inline-block;
+  padding: 0.5em 1em;
+  border-radius: 3px;
+  background: #3893E8;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+}
+
+.ai-analysis-panel .button:hover {
+  background: #2e84d7;
+}
+
+.ai-analysis-panel .button-green {
+  background: #629924;
+}
+
+.ai-analysis-panel .button-green:hover {
+  background: #538421;
+}
