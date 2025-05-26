@@ -76,6 +76,7 @@ async function addAiAnalysisTab() {
     const aiTab = document.createElement('div');
     aiTab.className = 'mchat__tab ai-analysis'; // Match Lichess tab class
     aiTab.setAttribute('role', 'tab');
+    aiTab.setAttribute('data-tab', 'ai-analysis'); // Für die tab-Identifikation
     
     // Add span with text like the other tabs
     const tabSpan = document.createElement('span');
@@ -95,10 +96,60 @@ async function addAiAnalysisTab() {
     // Find the parent mchat element to add our content panel
     const mchatElement = tabsContainer.closest('.mchat');
     
+    // Identifiziere alle vorhandenen Tabs für den Event Listener
+    const allTabs = tabsContainer.querySelectorAll('.mchat__tab');
+    console.log('Found existing tabs:', allTabs.length);
+    
     // Create the tab content panel (initially hidden)
     const aiContent = document.createElement('div');
     aiContent.className = 'mchat__content ai-analysis-panel'; // Match Lichess content class
+    aiContent.setAttribute('data-tab', 'ai-analysis'); // Für die tab-Identifikation
     aiContent.style.display = 'none'; // Initially hidden
+    
+    // Füge den Content-Panel zu mchat hinzu
+    if (mchatElement) {
+      mchatElement.appendChild(aiContent);
+      console.log('Added AI Analysis content panel');
+    }
+    
+    // Finde alle Content-Panels
+    const allContentPanels = mchatElement.querySelectorAll('.mchat__content');
+    console.log('Found content panels:', allContentPanels.length);
+    
+    // Tab-Click-Handler hinzufügen
+    aiTab.addEventListener('click', (event) => {
+      event.preventDefault();
+      
+      // Alle Tabs deaktivieren
+      allTabs.forEach(tab => tab.classList.remove('active'));
+      // Diesen Tab aktivieren
+      aiTab.classList.add('active');
+      
+      // Alle Content-Panels ausblenden
+      allContentPanels.forEach(panel => panel.style.display = 'none');
+      // AI-Content anzeigen
+      aiContent.style.display = 'block';
+    });
+    
+    // Auch die anderen Tabs mit Click-Handlern versehen, um zurück zu wechseln
+    allTabs.forEach(tab => {
+      // Nur existierende Tabs, nicht unseren AI-Tab
+      if (!tab.classList.contains('ai-analysis')) {
+        const originalClickHandler = tab.onclick;
+        
+        tab.addEventListener('click', (event) => {
+          // AI-Tab deaktivieren
+          aiTab.classList.remove('active');
+          // AI-Content ausblenden
+          aiContent.style.display = 'none';
+          
+          // Original-Handler aufrufen, falls vorhanden
+          if (originalClickHandler) {
+            originalClickHandler(event);
+          }
+        });
+      }
+    });
     
     // Funktion zum Extrahieren des PGN aus dem Lichess DOM
     function extractPgn() {

@@ -229,6 +229,11 @@ app.use('*', cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return '*';
     
+    // Erlaube alle Chrome Extensions
+    if (origin.startsWith('chrome-extension://')) {
+      return origin;
+    }
+    
     // Check if origin is allowed
     if (ALLOWED_ORIGINS.includes(origin)) {
       return origin;
