@@ -81,6 +81,7 @@ async function addAiAnalysisTab() {
     // Add span with text like the other tabs
     const tabSpan = document.createElement('span');
     tabSpan.textContent = 'AI Analyse';
+    tabSpan.style.color = '#805AD5'; // Lila Farbe, gleich wie in den Move-Highlights
     aiTab.appendChild(tabSpan);
     
     // Füge den Tab als dritten Tab ein (vor dem Telefon-Icon)
@@ -481,7 +482,7 @@ async function addAiAnalysisTab() {
       styleSheet.id = 'ai-comment-styles';
       styleSheet.innerHTML = `
         .ai-comment {
-          color: #805AD5 !important; /* Lila Farbe */
+          color: #805AD5 !important; /* Lila Farbe für alle AI-Kommentare */
           padding: 5px 0;
         }
         
@@ -491,13 +492,16 @@ async function addAiAnalysisTab() {
         }
         
         .ai-recommendation {
-          color: #805AD5;
-          font-weight: bold;
+          color: #805AD5; /* Lila Farbe beibehalten */
           margin-top: 3px;
         }
         
+        .ai-recommendation-move {
+          font-weight: bold; /* Nur der Zugvorschlag selbst ist fett */
+        }
+        
         .ai-reasoning {
-          color: #666;
+          color: #805AD5; /* Auch das Reasoning in lila */
           margin-top: 2px;
         }
         
@@ -519,7 +523,7 @@ async function addAiAnalysisTab() {
         ${moment.comment || ''}
         ${moment.recommendation ? `
           <div class="ai-recommendation">
-            Besser: ${moment.recommendation}
+            <span class="ai-recommendation-move">Besser: ${moment.recommendation}</span>
             <div class="ai-reasoning">${moment.reasoning || ''}</div>
           </div>
         ` : ''}
