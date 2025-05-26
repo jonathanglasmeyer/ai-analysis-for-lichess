@@ -202,12 +202,38 @@ async function addAiAnalysisTab() {
       // Nur existierende Tabs, nicht unseren AI-Tab
       if (!tab.classList.contains('ai-analysis')) {
         const originalClickHandler = tab.onclick;
+        const tabText = tab.textContent.trim();
         
         tab.addEventListener('click', (event) => {
           // AI-Tab deaktivieren
-          aiTab.classList.remove('active');
+          aiTab.classList.remove('mchat__tab-active');
+          
           // AI-Content ausblenden
           aiContent.style.display = 'none';
+          
+          // Finde das zugehörige Panel für diesen Tab
+          let targetPanel = null;
+          const tabType = tab.getAttribute('data-tab') || 
+                         Array.from(tab.classList).find(cls => cls !== 'mchat__tab' && cls !== 'mchat__tab-active');
+          
+          if (tabType) {
+            // Suche zuerst nach data-tab Attribut
+            targetPanel = mchatElement.querySelector(`.mchat__content[data-tab="${tabType}"]`);
+            
+            // Dann nach Klasse
+            if (!targetPanel) {
+              targetPanel = mchatElement.querySelector(`.mchat__content.${tabType}`);
+            }
+          }
+          
+          // Panel aktivieren, wenn gefunden
+          if (targetPanel) {
+            // Aktivieren des Panels
+            targetPanel.style.display = 'block';
+            
+            // Aktivieren des Tabs
+            tab.classList.add('mchat__tab-active');
+          }
           
           // Original-Handler aufrufen, falls vorhanden
           if (originalClickHandler) {
@@ -551,12 +577,16 @@ async function addAiAnalysisTab() {
     aiTab.addEventListener('click', () => {
       // Deaktiviere alle Tabs und verstecke alle Panels
       const tabs = tabsContainer.querySelectorAll('.mchat__tab');
-      tabs.forEach(tab => tab.classList.remove('mchat__tab-active'));
+      tabs.forEach(tab => {
+        tab.classList.remove('mchat__tab-active');
+      });
       
       // Verstecke alle Content-Panels
       if (mchatElement) {
         const contentPanels = mchatElement.querySelectorAll('.mchat__content');
-        contentPanels.forEach(panel => panel.style.display = 'none');
+        contentPanels.forEach(panel => {
+          panel.style.display = 'none';
+        });
       }
       
       // Aktiviere unseren Tab und Panel
