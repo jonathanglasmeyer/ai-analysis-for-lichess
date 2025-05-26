@@ -1,712 +1,682 @@
-/**
- * Content script for the ChessGPT Lichess Integration
- * This is a simplified version for initial testing
- */
+(function () {
+  'use strict';
 
-console.log('ChessGPT Lichess Integration loaded', window.location.href);
-
-// Debugging-Funktion, um die DOM-Struktur zu analysieren
-function analyzeDOM() {
-  console.log('Analyzing Lichess DOM structure...');
-  
-  // Prüfe auf Analyse-Unterboard
-  const underboard = document.querySelector('.analyse__underboard');
-  console.log('Analyse underboard found:', !!underboard);
-  
-  // Prüfe auf Tabs
-  const tabs = document.querySelector('.tabs-horiz');
-  console.log('Tabs found:', !!tabs);
-  
-  // Liste alle wichtigen Elemente auf
-  console.log('Body classes:', document.body.className);
-  console.log('Main content:', document.querySelector('main')?.className);
-}
-
-// Führe DOM-Analyse sofort und nach einer Verzögerung aus (für dynamisch geladene Inhalte)
-analyzeDOM();
-setTimeout(analyzeDOM, 2000);
-
-// DOM Element selectors basierend auf der tatsächlichen Struktur
-const LICHESS_SIDEBAR_SELECTOR = '.mchat';
-const LICHESS_TABS_SELECTOR = '.mchat__tabs';
-
-// Debug ausgabe für die aktuelle Tab-Struktur
-console.log('Current tab structure:', document.querySelector('.mchat__tabs')?.outerHTML);
-
-/**
- * Waits for a DOM element to appear and returns it
- */
-function waitForElement(selector, timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      return resolve(element);
-    }
-
-    const observer = new MutationObserver(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        observer.disconnect();
-        resolve(element);
-      }
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
-
-    setTimeout(() => {
-      observer.disconnect();
-      reject(new Error(`Element ${selector} not found within ${timeout}ms`));
-    }, timeout);
-  });
-}
-
-/**
- * Adds the AI Analysis tab to the Lichess sidebar
- */
-async function addAiAnalysisTab() {
-  try {
-    // Wait for the Lichess sidebar tabs to appear
-    const tabsContainer = await waitForElement(LICHESS_TABS_SELECTOR);
-    console.log('Found tabs container:', tabsContainer);
-    
-    // Create the new tab based on the existing tab structure
-    const aiTab = document.createElement('div');
-    aiTab.className = 'mchat__tab ai-analysis'; // Match Lichess tab class
-    aiTab.setAttribute('role', 'tab');
-    aiTab.setAttribute('data-tab', 'ai-analysis'); // Für die tab-Identifikation
-    
-    // Add span with text like the other tabs
-    const tabSpan = document.createElement('span');
-    tabSpan.textContent = 'AI Analyse';
-    tabSpan.style.color = '#805AD5'; // Lila Farbe, gleich wie in den Move-Highlights
-    aiTab.appendChild(tabSpan);
-    
-    // Füge den Tab als dritten Tab ein (vor dem Telefon-Icon)
-    const phoneTab = tabsContainer.querySelector('.palantir-slot');
-    if (phoneTab) {
-      tabsContainer.insertBefore(aiTab, phoneTab);
-      console.log('Added AI Analysis tab before phone icon');
-    } else {
-      tabsContainer.appendChild(aiTab);
-      console.log('Added AI Analysis tab to the end (phone icon not found)');
-    }
-    
-    // Find the parent mchat element to add our content panel
-    const mchatElement = tabsContainer.closest('.mchat');
-    
-    // Identifiziere alle vorhandenen Tabs für den Event Listener
-    const allTabs = tabsContainer.querySelectorAll('.mchat__tab');
-    console.log('Found existing tabs:', allTabs.length);
-    
-    // Create the tab content panel (initially hidden)
-    const aiContent = document.createElement('div');
-    aiContent.className = 'mchat__content ai-analysis-panel'; // Match Lichess content class
-    aiContent.setAttribute('data-tab', 'ai-analysis'); // Für die tab-Identifikation
-    aiContent.style.display = 'none'; // Initially hidden
-    
-    // Füge den Content-Panel zu mchat hinzu
-    if (mchatElement) {
-      mchatElement.appendChild(aiContent);
-      console.log('Added AI Analysis content panel');
-    }
-    
-    // Finde alle Content-Panels
-    const allContentPanels = mchatElement.querySelectorAll('.mchat__content');
-    console.log('Found content panels:', allContentPanels.length);
-    
-    // Globale Variable für den Cache-Status
-    let cachedResult = null;
-    let isCacheCheckInProgress = false;
-    
-    // Hilfsfunktion zum Prüfen des Cache-Status - wir rufen sie proaktiv auf
-    function checkCacheStatus() {
-      if (isCacheCheckInProgress) return Promise.resolve(null);
-      
-      isCacheCheckInProgress = true;
-      return new Promise((resolve) => {
-        const pgn = extractPgn();
-        if (!pgn) {
-          isCacheCheckInProgress = false;
-          resolve({ error: 'Fehler: PGN konnte nicht extrahiert werden' });
-          return;
-        }
-        
-        chrome.runtime.sendMessage({ type: 'CHECK_CACHE', pgn }, response => {
-          isCacheCheckInProgress = false;
-          resolve(response || { ok: false });
-        });
-      });
-    }
-    
-    // Cache bereits im Hintergrund prüfen
-    setTimeout(() => {
-      checkCacheStatus().then(result => {
-        cachedResult = result;
-        console.log('Cache pre-loaded:', cachedResult ? 'SUCCESS' : 'FAILED');
-      });
-    }, 1000);
-    
-    // Tab-Click-Handler hinzufügen
-    aiTab.addEventListener('click', async (event) => {
-      event.preventDefault();
-      
-      // Alle Tabs deaktivieren
-      allTabs.forEach(tab => tab.classList.remove('active'));
-      // Diesen Tab aktivieren
-      aiTab.classList.add('active');
-      
-      // Alle Content-Panels ausblenden
-      allContentPanels.forEach(panel => panel.style.display = 'none');
-      // AI-Content anzeigen
-      aiContent.style.display = 'block';
-      
-      // Zeige sofort einen neutralen Ladeindikator an, egal ob Cache-Hit oder Miss
-      aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
-      
-      // Verwende das vorab geladene Ergebnis, falls verfügbar
-      if (cachedResult) {
-        if (cachedResult.error) {
-          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
-        } else if (cachedResult.ok) {
-          // Cache-Hit: Zeige direkt die Analyse an
-          displayAnalysisResult(cachedResult, aiContent);
-        } else {
-          // Cache-Miss: Zeige Analyse-Button an
-          aiContent.innerHTML = '';
-          aiContent.appendChild(analyzeButton);
-        }
-        return;
-      }
-      
-      // Wenn kein vorab geladenes Ergebnis verfügbar ist, prüfe jetzt
-      const result = await checkCacheStatus();
-      if (!result) return; // Falls die Prüfung bereits läuft
-      
-      if (result.error) {
-        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
-      } else if (result.ok) {
-        // Cache-Hit: Zeige direkt die Analyse an
-        displayAnalysisResult(result, aiContent);
-      } else {
-        // Cache-Miss: Zeige Analyse-Button an
-        aiContent.innerHTML = '';
-        aiContent.appendChild(analyzeButton);
-      }
-    });
-    
-    // Einfache Tab-Funktionalität - MINIMAL, nur für unseren eigenen Tab
-    // Nichts anderes verändern oder manipulieren
-    
-    // VERBESSERTE IMPLEMENTIERUNG: Universeller Tab-Handler
-    
-    // Funktion, die ein Panel korrekt aktiviert und konfiguriert
-    function activatePanel(panel, tabType) {
-      // Panel sichtbar machen
-      panel.style.display = 'block';
-      
-      // Panel-Typ spezifische Anpassungen
-      if (tabType === 'note') {
-        console.log('Configuring notes panel');
-        // Fix für das Notes-Panel
-        panel.style.height = '100%';
-        panel.style.display = 'flex';
-        panel.style.flexDirection = 'column';
-        
-        // Textarea finden und konfigurieren
-        const textarea = panel.querySelector('textarea.mchat__note');
-        if (textarea) {
-          console.log('Configuring notes textarea');
-          
-          // Sicherstellen, dass die Textarea korrekt dargestellt wird
-          textarea.style.flexGrow = '1';
-          textarea.style.height = '100%';
-          textarea.style.width = '100%';
-          
-          // Lichess Lifecycle simulieren
+  /**
+   * DOM utility functions for the ChessGPT Lichess Extension
+   */
+  /**
+   * Waits for a DOM element to appear and returns it
+   */
+  function waitForElement(selector, timeout = 5000) {
+      return new Promise((resolve, reject) => {
+          const element = document.querySelector(selector);
+          if (element) {
+              return resolve(element);
+          }
+          const observer = new MutationObserver(() => {
+              const element = document.querySelector(selector);
+              if (element) {
+                  observer.disconnect();
+                  resolve(element);
+              }
+          });
+          observer.observe(document.body, {
+              childList: true,
+              subtree: true
+          });
           setTimeout(() => {
-            textarea.blur();
-            textarea.click();
-            textarea.focus();
-          }, 10);
-        }
-      } 
-      else if (tabType === 'chat' || tabType === 'discussion') {
-        console.log('Configuring chat panel');
-        // Fix für das Chat-Panel
-        panel.style.height = '100%';
-        panel.style.display = 'flex';
-        panel.style.flexDirection = 'column';
-        
-        // Chat-Container und Eingabefeld finden
-        const chatLines = panel.querySelector('.mchat__messages');
-        const chatInput = panel.querySelector('.mchat__say');
-        
-        if (chatLines) {
-          chatLines.style.display = 'block';
-          chatLines.style.flexGrow = '1';
-          chatLines.style.overflow = 'auto';
-        }
-        
-        if (chatInput) {
-          chatInput.style.display = 'flex';
-        }
-      }
-    }
-    
-    // Funktion zum Aktivieren des AI-Tabs
-    function activateAiTab() {
-      console.log('Activating AI Tab');
-      
-      // Alle Tabs deaktivieren
-      const tabs = mchatElement.querySelectorAll('.mchat__tab');
-      tabs.forEach(tab => tab.classList.remove('mchat__tab-active'));
-      
-      // Alle Panels ausblenden
-      const panels = mchatElement.querySelectorAll('.mchat__content');
-      panels.forEach(panel => panel.style.display = 'none');
-      
-      // AI-Tab aktivieren
-      aiTab.classList.add('mchat__tab-active');
-      aiContent.style.display = 'block';
-    }
-    
-    // Event-Listeners für die Tabs
-    allTabs.forEach(tab => {
-      tab.addEventListener('click', function(event) {
-        const isAiTab = tab.classList.contains('ai-analysis');
-        console.log(`Tab clicked: ${tab.textContent.trim()}, is AI tab: ${isAiTab}`);
-        
-        if (isAiTab) {
-          // AI-Tab wurde geklickt - wird in seinem eigenen Handler behandelt
-          return;
-        }
-        
-        // Original-Tab wurde geklickt
-        // 1. Deaktiviere den AI-Tab
-        aiTab.classList.remove('mchat__tab-active');
-        aiContent.style.display = 'none';
-        
-        // 2. Bestimme den Tab-Typ
-        const tabType = tab.getAttribute('data-tab') || 
-                       Array.from(tab.classList).find(cls => 
-                         cls !== 'mchat__tab' && cls !== 'mchat__tab-active');
-        
-        if (!tabType) {
-          console.log('Could not determine tab type');
-          return;
-        }
-        
-        console.log(`Original tab type: ${tabType}`);
-        
-        // 3. Finde das entsprechende Panel
-        const targetPanel = mchatElement.querySelector(`.mchat__content[data-tab="${tabType}"]`) || 
-                          mchatElement.querySelector(`.mchat__content.${tabType}`);
-        
-        if (targetPanel) {
-          // Aktiviere das Panel korrekt
-          activatePanel(targetPanel, tabType);
-        }
+              observer.disconnect();
+              reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+          }, timeout);
       });
-    });
-    
-    // Für Debugging-Zwecke: Zeige aktive Tabs
-    document.addEventListener('click', function(event) {
-      if (event.target.closest('.mchat__tab')) {
-        setTimeout(() => {
-          // Prüfe, welche Tabs aktiv sind
-          const activeTabs = document.querySelectorAll('.mchat__tab-active');
-          console.log('Active tabs after click:', activeTabs.length);
-          activeTabs.forEach(tab => {
-            console.log(`- ${tab.textContent.trim()}`);
-          });
-          
-          // Prüfe, welche Panels sichtbar sind
-          const visiblePanels = Array.from(mchatElement.querySelectorAll('.mchat__content'))
-            .filter(p => p.style.display !== 'none');
-          console.log('Visible panels:', visiblePanels.length);
-          visiblePanels.forEach(panel => {
-            console.log(`- ${panel.className}`);
-          });
-        }, 50);
-      }
-    }, true);
-    
-    // Funktion zum Extrahieren des PGN aus dem Lichess DOM
-    function extractPgn() {
+  }
+  /**
+   * Debugging function to analyze the DOM structure
+   */
+  function analyzeDOM() {
+      console.log('Analyzing Lichess DOM structure...');
+      // Check for analysis underboard
+      const underboard = document.querySelector('.analyse__underboard');
+      console.log('Analyse underboard found:', !!underboard);
+      // Check for tabs
+      const tabs = document.querySelector('.tabs-horiz');
+      console.log('Tabs found:', !!tabs);
+      // List all important elements
+      console.log('Body classes:', document.body.className);
+      console.log('Main content:', document.querySelector('main')?.className);
+  }
+
+  /**
+   * PGN extraction utilities
+   */
+  /**
+   * Extracts PGN from the Lichess DOM using various methods
+   */
+  function extractPgn() {
       console.log('Attempting to extract PGN...');
-      
-      // Methode 1: Direkt aus dem .pgn Element
+      // Method 1: Directly from the .pgn element
       const pgnElement = document.querySelector('.pgn');
       if (pgnElement && pgnElement.textContent) {
-        console.log('Found PGN via .pgn element');
-        return pgnElement.textContent;
+          console.log('Found PGN via .pgn element');
+          return pgnElement.textContent;
       }
-      
-      // Methode 2: Aus der URL des Download-Links
+      // Method 2: From the URL of the download link
       const downloadLinks = document.querySelectorAll('a[href*="/game/export/"]');
       if (downloadLinks.length > 0) {
-        console.log('Found export links, fetching PGN...');
-        // Extrahiere die Game-ID aus der URL
-        const href = downloadLinks[0].getAttribute('href');
-        const gameId = href.match(/\/game\/export\/([^?]+)/);
-        
-        if (gameId && gameId[1]) {
-          console.log('Game ID found:', gameId[1]);
-          // Diese Methode würde einen Fetch-Request benötigen, was wir später implementieren
-          return `Game ID: ${gameId[1]} (PGN wird vom Server geholt)`;
-        }
+          console.log('Found export links, fetching PGN...');
+          // Extract the game ID from the URL
+          const href = downloadLinks[0].getAttribute('href');
+          if (!href)
+              return null;
+          const gameId = href.match(/\/game\/export\/([^?]+)/);
+          if (gameId && gameId[1]) {
+              console.log('Game ID found:', gameId[1]);
+              // This method would require a fetch request, which we'll implement later
+              return `Game ID: ${gameId[1]} (PGN wird vom Server geholt)`;
+          }
       }
-      
-      // Methode 3: Aus der aktuellen URL
+      // Method 3: From the current URL
       const currentUrl = window.location.href;
       const urlMatch = currentUrl.match(/lichess\.org\/([^/?#]+)/);
       if (urlMatch && urlMatch[1]) {
-        console.log('Extracted game ID from URL:', urlMatch[1]);
-        return `Game ID: ${urlMatch[1]} (PGN wird vom Server geholt)`;
+          console.log('Extracted game ID from URL:', urlMatch[1]);
+          return `Game ID: ${urlMatch[1]} (PGN wird vom Server geholt)`;
       }
-      
       console.error('Could not extract PGN');
       return null;
-    }
-    
-    // Add the button to create analysis
-    const analyzeButton = document.createElement('button');
-    analyzeButton.className = 'button';
-    analyzeButton.textContent = 'AI ANALYSE ERSTELLEN';
-    analyzeButton.style.margin = '10px';
-    analyzeButton.style.padding = '8px 12px';
-    analyzeButton.style.backgroundColor = '#629924'; // Grün wie Lichess-Buttons
-    analyzeButton.style.color = 'white';
-    analyzeButton.style.border = 'none';
-    analyzeButton.style.borderRadius = '3px';
-    analyzeButton.style.cursor = 'pointer';
-    
-    analyzeButton.addEventListener('click', () => {
-      // PGN extrahieren
-      const pgn = extractPgn();
-      
-      if (pgn) {
-        // Zeige Lade-Status an
-        aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Analysiere Partie...</div>';
-        
-        // Sende Nachricht an das Background-Script
-        chrome.runtime.sendMessage(
-          { type: 'ANALYZE_PGN', pgn: pgn },
-          response => {
-            if (response && response.success) {
-              // Zeige Ergebnis an
-              displayAnalysisResult(response.data, aiContent);
-            } else {
-              // Zeige Fehler an
-              aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">
-                Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
-              </div>`;
-            }
+  }
+
+  /**
+   * API Service for ChessGPT Lichess Extension
+   */
+  // API Endpoints
+  /**
+   * Checks if a PGN is already in the cache
+   */
+  function requestCacheCheck(pgn) {
+      return new Promise((resolve) => {
+          console.log('Sending cache check request for PGN:', pgn.substring(0, 50) + '...');
+          try {
+              chrome.runtime.sendMessage({ type: 'CHECK_CACHE', pgn }, (response) => {
+                  console.log('Received cache check response:', JSON.stringify(response));
+                  // Stellen sicher, dass die Antwort der erwarteten Struktur entspricht
+                  if (!response) {
+                      console.warn('Empty response received from background script');
+                      resolve({ ok: false, error: 'Keine Antwort vom Hintergrundskript erhalten' });
+                      return;
+                  }
+                  resolve(response);
+              });
           }
-        );
-      } else {
-        aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
-      }
-    });
-    
-    // Hilfsfunktion zur Normalisierung der Analysestruktur aus verschiedenen Quellen
-    function normalizeAnalysisData(response) {
-      // Einheitliche Datenstruktur für Analysen
-      const normalized = {
-        summary: '',
-        moments: []
-      };
-      
-      // Logge die Response-Struktur zur Analyse
-      console.log('Response to normalize:', response);
-      
-      // Fall 1: Cache-Hit mit originalResponse
-      if (response?.originalResponse?.analysis) {
-        normalized.summary = response.originalResponse.analysis.summary || '';
-        normalized.moments = response.originalResponse.analysis.moments || [];
-        console.log('Normalized from originalResponse.analysis');
-      }
-      // Fall 2: Cache-Hit mit direkter Struktur
-      else if (response?.summary) {
-        normalized.summary = response.summary || '';
-        normalized.moments = response.moments || [];
-        console.log('Normalized from direct response');
-      }
-      // Fall 3: Frische Analyse mit data-Struktur
-      else if (response?.data) {
-        normalized.summary = response.data.summary || '';
-        normalized.moments = response.data.moments || [];
-        console.log('Normalized from response.data');
-      }
-      // Fall 4: Direkte Analyse-Objekt
-      else if (response?.analysis) {
-        normalized.summary = response.analysis.summary || '';
-        normalized.moments = response.analysis.moments || [];
-        console.log('Normalized from response.analysis');
-      }
-      
-      // Wenn die Summary Markdown-Code-Blöcke enthält, parse sie
-      if (normalized.summary && normalized.summary.includes('```')) {
-        try {
-          // Entferne Code-Block-Markierungen (```json und ```)
-          const cleanedText = normalized.summary.replace(/```json\n|```/g, '');
-          const jsonObject = JSON.parse(cleanedText.trim());
-          
-          // Wenn das JSON-Objekt eine summary hat, verwende sie
-          if (jsonObject.summary) {
-            normalized.summary = jsonObject.summary;
-            console.log('Parsed summary from JSON code block');
-            
-            // Auch moments übernehmen, wenn vorhanden
-            if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
-              normalized.moments = jsonObject.moments;
-              console.log('Parsed moments from JSON code block');
-            }
+          catch (error) {
+              console.error('Error sending message to background script:', error);
+              resolve({ ok: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript' });
           }
-        } catch (e) {
-          console.log('Failed to parse JSON from code block, using raw summary:', e);
-          // Einfache Markdown-Formatierung anwenden
-          normalized.summary = normalized.summary
-            .replace(/```json\n|```/g, '')
-            .replace(/\n\n/g, '<br><br>')
-            .replace(/\n- /g, '<br>• ');
-        }
-      }
-      
-      console.log('Normalized data:', {
-        summary: normalized.summary.substring(0, 50) + '...',
-        moments: normalized.moments.length
       });
-      
-      return normalized;
-    }
-    
-    // Hilfsfunktion zum Anzeigen des Analyseergebnisses
-    function displayAnalysisResult(result, container) {
-      // Daten aus verschiedenen Formaten normalisieren
-      const normalizedData = normalizeAnalysisData(result);
-      
-      // Analyse-Zusammenfassung anzeigen
-      container.innerHTML = `
-        <div style="padding: 20px;">
-          <h3 style="margin-top: 0;">Analyse-Zusammenfassung</h3>
-          <p style="white-space: pre-line;">${normalizedData.summary || 'Keine Zusammenfassung verfügbar'}</p>
-          
-          <div class="ai-moments-info" style="margin-top: 15px; font-size: 0.9em; color: #666;">
-            <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
-          </div>
-        </div>
-      `;
-      
-      // Highlights in der Zugliste implementieren, wenn Momente vorhanden sind
-      if (normalizedData.moments && normalizedData.moments.length > 0) {
-        console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
-        highlightMovesInMoveList(normalizedData.moments);
-      } else {
-        console.log('No moments to highlight');
+  }
+  /**
+   * Sends a PGN for analysis
+   */
+  function requestAnalysis(pgn) {
+      return new Promise((resolve) => {
+          console.log('Sending analysis request for PGN:', pgn.substring(0, 50) + '...');
+          try {
+              chrome.runtime.sendMessage({ type: 'ANALYZE_PGN', pgn }, (response) => {
+                  console.log('Received analysis response:', JSON.stringify(response));
+                  // Stellen sicher, dass die Antwort der erwarteten Struktur entspricht
+                  if (!response) {
+                      console.warn('Empty analysis response received from background script');
+                      resolve({ success: false, error: 'Keine Antwort vom Hintergrundskript erhalten' });
+                      return;
+                  }
+                  resolve(response);
+              });
+          }
+          catch (error) {
+              console.error('Error sending analysis request to background script:', error);
+              resolve({ success: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript' });
+          }
+      });
+  }
+
+  /**
+   * Tab management utilities for ChessGPT Lichess Extension
+   */
+  /**
+   * Activates a panel and configures it based on the tab type
+   */
+  function activatePanel(panel, tabType) {
+      // Make panel visible
+      panel.style.display = 'block';
+      // Tab type specific adjustments
+      if (tabType === 'note') {
+          console.log('Configuring notes panel');
+          // Fix for the Notes panel
+          panel.style.height = '100%';
+          panel.style.display = 'flex';
+          panel.style.flexDirection = 'column';
+          // Find and configure the textarea
+          const textarea = panel.querySelector('textarea.mchat__note');
+          if (textarea) {
+              console.log('Configuring notes textarea');
+              // Ensure the textarea is displayed correctly
+              textarea.style.flexGrow = '1';
+              textarea.style.height = '100%';
+              textarea.style.width = '100%';
+              // Simulate Lichess lifecycle
+              setTimeout(() => {
+                  textarea.blur();
+                  textarea.click();
+                  textarea.focus();
+              }, 10);
+          }
       }
-    }
-    
-    // Hilfsfunktion zum Highlighten von Zügen in der Lichess-Zugliste
-    function highlightMovesInMoveList(moments) {
-      console.log('Highlighting moves:', moments);
+      else if (tabType === 'chat' || tabType === 'discussion') {
+          console.log('Configuring chat panel');
+          // Fix for the Chat panel
+          panel.style.height = '100%';
+          panel.style.display = 'flex';
+          panel.style.flexDirection = 'column';
+          // Find chat container and input field
+          const chatLines = panel.querySelector('.mchat__messages');
+          const chatInput = panel.querySelector('.mchat__say');
+          if (chatLines) {
+              chatLines.style.display = 'block';
+              chatLines.style.flexGrow = '1';
+              chatLines.style.overflow = 'auto';
+          }
+          if (chatInput) {
+              chatInput.style.display = 'flex';
+          }
+      }
+  }
+  /**
+   * Activates the AI tab and deactivates all others
+   */
+  function activateAiTab(mchatElement, aiTab, aiContent) {
+      console.log('Activating AI Tab');
+      // Deactivate all tabs
+      const tabs = mchatElement.querySelectorAll('.mchat__tab');
+      tabs.forEach(tab => tab.classList.remove('mchat__tab-active'));
+      // Hide all panels
+      const panels = mchatElement.querySelectorAll('.mchat__content');
+      panels.forEach(panel => panel.style.display = 'none');
+      // Activate AI tab
+      aiTab.classList.add('mchat__tab-active');
+      aiContent.style.display = 'block';
+  }
+  /**
+   * Sets up event listeners for tabs
+   */
+  function setupTabEventListeners(mchatElement, allTabs, aiTab, aiContent) {
+      allTabs.forEach(tab => {
+          tab.addEventListener('click', function (event) {
+              const isAiTab = tab.classList.contains('ai-analysis');
+              console.log(`Tab clicked: ${tab.textContent?.trim()}, is AI tab: ${isAiTab}`);
+              if (isAiTab) {
+                  // AI tab click is handled by its own handler
+                  return;
+              }
+              // Original tab was clicked
+              // 1. Deactivate AI tab
+              aiTab.classList.remove('mchat__tab-active');
+              aiContent.style.display = 'none';
+              // 2. Determine tab type
+              const tabType = tab.getAttribute('data-tab') ||
+                  Array.from(tab.classList).find(cls => cls !== 'mchat__tab' && cls !== 'mchat__tab-active');
+              if (!tabType) {
+                  console.log('Could not determine tab type');
+                  return;
+              }
+              console.log(`Original tab type: ${tabType}`);
+              // 3. Find the corresponding panel
+              const targetPanel = mchatElement.querySelector(`.mchat__content[data-tab="${tabType}"]`) ||
+                  mchatElement.querySelector(`.mchat__content.${tabType}`);
+              if (targetPanel) {
+                  // Activate panel correctly
+                  activatePanel(targetPanel, tabType);
+              }
+          });
+      });
+      // Debug event listener for tab clicks
+      setupDebugClickListener(mchatElement);
+  }
+  /**
+   * Sets up a debug event listener for tab clicks
+   */
+  function setupDebugClickListener(mchatElement) {
+      document.addEventListener('click', function (event) {
+          const target = event.target;
+          if (target.closest('.mchat__tab')) {
+              setTimeout(() => {
+                  // Check which tabs are active
+                  const activeTabs = document.querySelectorAll('.mchat__tab-active');
+                  console.log('Active tabs after click:', activeTabs.length);
+                  activeTabs.forEach(tab => {
+                      console.log(`- ${tab.textContent?.trim()}`);
+                  });
+                  // Check which panels are visible
+                  const visiblePanels = Array.from(mchatElement.querySelectorAll('.mchat__content'))
+                      .filter(p => p.style.display !== 'none');
+                  console.log('Visible panels:', visiblePanels.length);
+                  visiblePanels.forEach(panel => {
+                      console.log(`- ${panel.className}`);
+                  });
+              }, 50);
+          }
+      }, true);
+  }
+
+  /**
+   * Analysis UI components and functions
+   */
+  /**
+   * Creates the analyze button
+   */
+  function createAnalyzeButton() {
+      const analyzeButton = document.createElement('button');
+      analyzeButton.className = 'button';
+      analyzeButton.textContent = 'AI ANALYSE ERSTELLEN';
+      analyzeButton.style.margin = '10px';
+      analyzeButton.style.padding = '8px 12px';
+      analyzeButton.style.backgroundColor = '#629924'; // Green like Lichess buttons
+      analyzeButton.style.color = 'white';
+      analyzeButton.style.border = 'none';
+      analyzeButton.style.borderRadius = '3px';
+      analyzeButton.style.cursor = 'pointer';
+      return analyzeButton;
+  }
+  /**
+   * Normalizes analysis data from different sources
+   */
+  function normalizeAnalysisData(response) {
+      // Unified data structure for analyses
+      const normalized = {
+          summary: '',
+          moments: []
+      };
+      // Log the response structure for analysis
+      console.log('Response to normalize:', response);
+      // Case 1: Cache hit with originalResponse
+      if (response?.originalResponse?.analysis) {
+          normalized.summary = response.originalResponse.analysis.summary || '';
+          normalized.moments = response.originalResponse.analysis.moments || [];
+          console.log('Normalized from originalResponse.analysis');
+      }
+      // Case 2: Cache hit with direct structure
+      else if (response?.summary) {
+          normalized.summary = response.summary || '';
+          normalized.moments = response.moments || [];
+          console.log('Normalized from direct response');
+      }
+      // Case 3: Fresh analysis with data structure
+      else if (response?.data) {
+          normalized.summary = response.data.summary || '';
+          normalized.moments = response.data.moments || [];
+          console.log('Normalized from response.data');
+      }
+      // Case 4: Direct analysis object
+      else if (response?.analysis) {
+          normalized.summary = response.analysis.summary || '';
+          normalized.moments = response.analysis.moments || [];
+          console.log('Normalized from response.analysis');
+      }
+      // If the summary contains markdown code blocks, parse them
+      if (normalized.summary && normalized.summary.includes('```')) {
+          try {
+              // Remove code block markers (```json and ```)
+              const cleanedText = normalized.summary.replace(/```json\n|```/g, '');
+              const jsonObject = JSON.parse(cleanedText.trim());
+              // If the JSON object has a summary, use it
+              if (jsonObject.summary) {
+                  normalized.summary = jsonObject.summary;
+                  console.log('Parsed summary from JSON code block');
+                  // Also take moments if available
+                  if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
+                      normalized.moments = jsonObject.moments;
+                      console.log('Parsed moments from JSON code block');
+                  }
+              }
+          }
+          catch (e) {
+              console.log('Failed to parse JSON from code block, using raw summary:', e);
+              // Apply simple markdown formatting
+              normalized.summary = normalized.summary
+                  .replace(/```json\n|```/g, '')
+                  .replace(/\n\n/g, '<br><br>')
+                  .replace(/\n- /g, '<br>• ');
+          }
+      }
+      console.log('Normalized data:', {
+          summary: normalized.summary.substring(0, 50) + '...',
+          moments: normalized.moments.length
+      });
+      return normalized;
+  }
+  /**
+   * Displays the analysis result in the content panel
+   */
+  function displayAnalysisResult(result, container) {
+      // Normalize data from different formats
+      const normalizedData = normalizeAnalysisData(result);
+      // Display analysis summary
+      container.innerHTML = `
+    <div style="padding: 20px;">
+      <h3 style="margin-top: 0;">Analyse-Zusammenfassung</h3>
+      <p style="white-space: pre-line;">${normalizedData.summary || 'Keine Zusammenfassung verfügbar'}</p>
       
-      // Finde die Zugliste
+      <div class="ai-moments-info" style="margin-top: 15px; font-size: 0.9em; color: #666;">
+        <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
+      </div>
+    </div>
+  `;
+      // Implement highlights in the move list if moments are available
+      if (normalizedData.moments && normalizedData.moments.length > 0) {
+          console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
+          highlightMovesInMoveList(normalizedData.moments);
+      }
+      else {
+          console.log('No moments to highlight');
+      }
+  }
+  /**
+   * Highlights moves in the Lichess move list
+   */
+  function highlightMovesInMoveList(moments) {
+      console.log('Highlighting moves:', moments);
+      // Find the move list
       const moveListContainer = document.querySelector('.tview2');
       if (!moveListContainer) {
-        console.error('Move list container not found');
-        return;
+          console.error('Move list container not found');
+          return;
       }
-      
-      // CSS für AI-Kommentare injizieren
+      // Inject CSS for AI comments
       injectAICommentStyles();
-      
-      // Sammle alle Moves in ein ply-basiertes Mapping
+      // Collect all moves in a ply-based mapping
       const momentsByPly = {};
       moments.forEach(moment => {
-        momentsByPly[moment.ply] = moment;
+          momentsByPly[moment.ply] = moment;
       });
-      
-      // Finde alle Zugeinträge in der Zugliste
+      // Find all move entries in the move list
       setTimeout(() => {
-        // Warte kurz, da Lichess die Zugliste dynamisch aktualisieren könnte
-        const moveElements = moveListContainer.querySelectorAll('move');
-        console.log('Found move elements:', moveElements.length);
-        
-        // Versuche, die Halbzug-Nummern (ply) für jeden Zug zu bestimmen
-        let currentPly = 0;
-        moveElements.forEach(moveEl => {
-          currentPly++;
-          
-          // Prüfe, ob dieser Zug ein wichtiges Moment ist
-          if (momentsByPly[currentPly]) {
-            // Nur den Kommentar hinzufügen, kein visuelles Highlighting des Zugs
-            const moment = momentsByPly[currentPly];
-            
-            // Prüfe, ob bereits ein Kommentar nach diesem Zug existiert
-            let commentElement = moveEl.nextElementSibling;
-            let commentAlreadyExists = false;
-            
-            if (commentElement && commentElement.tagName.toLowerCase() === 'interrupt') {
-              // Schaue, ob es bereits einen AI-Kommentar gibt
-              const existingAIComment = commentElement.querySelector('.ai-comment');
-              if (existingAIComment) {
-                commentAlreadyExists = true;
-              } else {
-                // Füge zu bestehenden Kommentaren hinzu
-                const commentContainer = commentElement.querySelector('comment') || 
-                                         commentElement.querySelector('.comment');
-                if (commentContainer) {
-                  insertAIComment(commentContainer, moment);
-                  commentAlreadyExists = true;
-                }
+          // Wait briefly as Lichess might update the move list dynamically
+          const moveElements = moveListContainer.querySelectorAll('move');
+          console.log('Found move elements:', moveElements.length);
+          // Try to determine the half-move numbers (ply) for each move
+          let currentPly = 0;
+          moveElements.forEach(moveEl => {
+              currentPly++;
+              // Check if this move is an important moment
+              if (momentsByPly[currentPly]) {
+                  // Only add the comment, no visual highlighting of the move
+                  const moment = momentsByPly[currentPly];
+                  // Check if a comment already exists after this move
+                  let commentElement = moveEl.nextElementSibling;
+                  let commentAlreadyExists = false;
+                  if (commentElement && commentElement.tagName.toLowerCase() === 'interrupt') {
+                      // Check if an AI comment already exists
+                      const existingAIComment = commentElement.querySelector('.ai-comment');
+                      if (existingAIComment) {
+                          commentAlreadyExists = true;
+                      }
+                      else {
+                          // Add to existing comments
+                          const commentContainer = commentElement.querySelector('comment') ||
+                              commentElement.querySelector('.comment');
+                          if (commentContainer) {
+                              insertAIComment(commentContainer, moment);
+                              commentAlreadyExists = true;
+                          }
+                      }
+                  }
+                  // If no comment exists, add a new one
+                  if (!commentAlreadyExists) {
+                      // Create a new comment in Lichess style
+                      const interrupt = document.createElement('interrupt');
+                      const comment = document.createElement('comment');
+                      comment.className = 'ai-comment';
+                      insertAIComment(comment, moment);
+                      interrupt.appendChild(comment);
+                      // Insert the comment after the move
+                      if (moveEl.nextSibling) {
+                          moveEl.parentNode?.insertBefore(interrupt, moveEl.nextSibling);
+                      }
+                      else {
+                          moveEl.parentNode?.appendChild(interrupt);
+                      }
+                  }
+                  console.log('Highlighted move:', moveEl.textContent, 'ply:', currentPly);
               }
-            }
-            
-            // Wenn kein Kommentar existiert, füge einen neuen hinzu
-            if (!commentAlreadyExists) {
-              // Erstelle einen neuen Kommentar im Lichess-Stil
-              const interrupt = document.createElement('interrupt');
-              const comment = document.createElement('comment');
-              comment.className = 'ai-comment';
-              
-              insertAIComment(comment, moment);
-              
-              interrupt.appendChild(comment);
-              
-              // Füge den Kommentar nach dem Zug ein
-              if (moveEl.nextSibling) {
-                moveEl.parentNode.insertBefore(interrupt, moveEl.nextSibling);
-              } else {
-                moveEl.parentNode.appendChild(interrupt);
-              }
-            }
-            
-            console.log('Highlighted move:', moveEl.textContent, 'ply:', currentPly);
-          }
-        });
+          });
       }, 500);
-    }
-    
-    // Fügt die CSS-Stile für AI-Kommentare ein
-    function injectAICommentStyles() {
-      if (document.getElementById('ai-comment-styles')) return;
-      
+  }
+  /**
+   * Injects CSS styles for AI comments
+   */
+  function injectAICommentStyles() {
+      if (document.getElementById('ai-comment-styles'))
+          return;
       const styleSheet = document.createElement('style');
       styleSheet.id = 'ai-comment-styles';
       styleSheet.innerHTML = `
-        .ai-comment {
-          color: #805AD5 !important; /* Lila Farbe für alle AI-Kommentare */
-          padding: 5px 0;
-        }
-        
-        .ai-highlighted-move {
-          background-color: rgba(128, 90, 213, 0.2) !important;
-          border-radius: 3px;
-        }
-        
-        .ai-recommendation {
-          color: #805AD5; /* Lila Farbe beibehalten */
-          margin-top: 3px;
-        }
-        
-        .ai-recommendation-move {
-          font-weight: bold; /* Nur der Zugvorschlag selbst ist fett */
-        }
-        
-        .ai-reasoning {
-          color: #805AD5; /* Auch das Reasoning in lila */
-          margin-top: 2px;
-        }
-        
-        .ai-magic-icon {
-          display: inline-block;
-          margin-right: 4px;
-          font-size: 14px;
-        }
-      `;
-      
+    .ai-comment {
+      color: #805AD5 !important; /* Purple color for all AI comments */
+      padding: 5px 0;
+    }
+    
+    .ai-highlighted-move {
+      background-color: rgba(128, 90, 213, 0.2) !important;
+      border-radius: 3px;
+    }
+    
+    .ai-recommendation {
+      color: #805AD5; /* Keep purple color */
+      margin-top: 3px;
+    }
+    
+    .ai-recommendation-move {
+      font-weight: bold; /* Only the move suggestion itself is bold */
+    }
+    
+    .ai-reasoning {
+      color: #805AD5; /* Also reasoning in purple */
+      margin-top: 2px;
+    }
+    
+    .ai-magic-icon {
+      display: inline-block;
+      margin-right: 4px;
+      font-size: 14px;
+    }
+  `;
       document.head.appendChild(styleSheet);
-    }
-    
-    // Fügt den AI-Kommentar in ein Element ein
-    function insertAIComment(element, moment) {
-      // Emoji für Magie: ✨ (Sparkles)
-      element.innerHTML = `
-        <span class="ai-magic-icon">✨</span>
-        ${moment.comment || ''}
-        ${moment.recommendation ? `
-          <div class="ai-recommendation">
-            <span class="ai-recommendation-move">Besser: ${moment.recommendation}</span>
-            <div class="ai-reasoning">${moment.reasoning || ''}</div>
-          </div>
-        ` : ''}
-      `;
-    }
-    
-    aiContent.appendChild(analyzeButton);
-    
-    // Add the content panel after the tabs
-    if (mchatElement) {
-      const existingContent = mchatElement.querySelector('.mchat__content');
-      if (existingContent && existingContent.parentNode) {
-        // Füge das Panel nach dem ersten Content-Element ein
-        existingContent.parentNode.insertBefore(aiContent, existingContent.nextSibling);
-        console.log('Added AI Analysis content panel');
-      } else {
-        mchatElement.appendChild(aiContent);
-        console.log('Added AI Analysis content panel (fallback)');
-      }
-    } else {
-      console.error('Could not find parent mchat element');
-    }
-    
-    // Add click event to tab mit unserem verbesserten Tab-Handler
-    aiTab.addEventListener('click', async () => {
-      // Aktiviere unseren Tab und deaktiviere die anderen mit der neuen Funktion
-      activateAiTab();
-      
-      // Zeige sofort einen neutralen Ladeindikator an
-      aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
-      
-      // Verwende das vorab geladene Ergebnis, falls verfügbar
-      if (cachedResult) {
-        console.log('Using pre-loaded cache result');
-        if (cachedResult.error) {
-          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
-        } else if (cachedResult.ok) {
-          displayAnalysisResult(cachedResult, aiContent);
-        } else {
-          aiContent.innerHTML = '';
-          aiContent.appendChild(analyzeButton);
-        }
-        return;
-      }
-      
-      // Wenn kein vorab geladenes Ergebnis verfügbar ist, prüfe jetzt
-      const result = await checkCacheStatus();
-      if (!result) return; // Falls die Prüfung bereits läuft
-      
-      if (result.error) {
-        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
-      } else if (result.ok) {
-        displayAnalysisResult(result, aiContent);
-      } else {
-        aiContent.innerHTML = '';
-        aiContent.appendChild(analyzeButton);
-      }
-    });
-    
-    console.log('AI Analysis tab integration complete');
-  } catch (error) {
-    console.error('Failed to add AI Analysis tab:', error);
   }
-}
+  /**
+   * Inserts an AI comment into an element
+   */
+  function insertAIComment(element, moment) {
+      // Emoji for magic: ✨ (Sparkles)
+      element.innerHTML = `
+    <span class="ai-magic-icon">✨</span>
+    ${moment.comment || ''}
+    ${moment.recommendation ? `
+      <div class="ai-recommendation">
+        <span class="ai-recommendation-move">Besser: ${moment.recommendation}</span>
+        <div class="ai-reasoning">${moment.reasoning || ''}</div>
+      </div>
+    ` : ''}
+  `;
+  }
 
-// Initialize when the page is fully loaded
-window.addEventListener('load', () => {
-  addAiAnalysisTab();
-});
+  /**
+   * Content script for the ChessGPT Lichess Integration
+   */
+  const LICHESS_TABS_SELECTOR = '.mchat__tabs';
+  // Global variables
+  let cachedResult = null;
+  let isCacheCheckInProgress = false;
+  /**
+   * Adds the AI Analysis tab to the Lichess sidebar
+   */
+  async function addAiAnalysisTab() {
+      try {
+          console.log('ChessGPT Lichess Integration loaded', window.location.href);
+          // Run DOM analysis immediately and after a delay (for dynamically loaded content)
+          analyzeDOM();
+          setTimeout(analyzeDOM, 2000);
+          console.log('Initializing AI Analysis tab...');
+          // Wait for the tab container to appear
+          const tabsContainer = await waitForElement(LICHESS_TABS_SELECTOR);
+          console.log('Found tabs container:', tabsContainer);
+          // Create the new tab based on the existing tab structure
+          const aiTab = document.createElement('div');
+          aiTab.className = 'mchat__tab ai-analysis'; // Match Lichess tab class
+          aiTab.setAttribute('role', 'tab');
+          aiTab.setAttribute('data-tab', 'ai-analysis');
+          // Add span with text like the other tabs
+          const tabSpan = document.createElement('span');
+          tabSpan.textContent = 'AI Analyse';
+          tabSpan.style.color = '#805AD5'; // Purple color, same as in move highlights
+          aiTab.appendChild(tabSpan);
+          // Insert tab as third tab (before phone icon)
+          const phoneTab = tabsContainer.querySelector('.palantir-slot');
+          if (phoneTab) {
+              tabsContainer.insertBefore(aiTab, phoneTab);
+              console.log('Added AI Analysis tab before phone icon');
+          }
+          else {
+              tabsContainer.appendChild(aiTab);
+              console.log('Added AI Analysis tab to the end (phone icon not found)');
+          }
+          // Find the parent mchat element to add our content panel
+          const mchatElement = tabsContainer.closest('.mchat');
+          if (!mchatElement) {
+              throw new Error('Could not find parent mchat element');
+          }
+          // Identify all existing tabs for the event listener
+          const allTabs = tabsContainer.querySelectorAll('.mchat__tab');
+          console.log('Found existing tabs:', allTabs.length);
+          // Create the tab content panel (initially hidden)
+          const aiContent = document.createElement('div');
+          aiContent.className = 'mchat__content ai-analysis-panel'; // Match Lichess content class
+          aiContent.setAttribute('data-tab', 'ai-analysis');
+          aiContent.style.display = 'none'; // Initially hidden
+          // Add the content panel to mchat
+          mchatElement.appendChild(aiContent);
+          console.log('Added AI Analysis content panel');
+          // Helper function to check cache status
+          async function checkCacheStatus() {
+              if (isCacheCheckInProgress) {
+                  console.log('Cache check already in progress');
+                  return null;
+              }
+              isCacheCheckInProgress = true;
+              try {
+                  const pgn = extractPgn();
+                  if (!pgn) {
+                      console.error('No PGN found for cache check');
+                      isCacheCheckInProgress = false;
+                      return { error: 'Konnte keine PGN finden' };
+                  }
+                  console.log('Checking cache for:', pgn.substring(0, 50) + '...');
+                  const result = await requestCacheCheck(pgn);
+                  isCacheCheckInProgress = false;
+                  cachedResult = result;
+                  return result;
+              }
+              catch (error) {
+                  console.error('Error during cache check:', error);
+                  isCacheCheckInProgress = false;
+                  return { error: `Fehler bei der Cache-Prüfung: ${error}` };
+              }
+          }
+          // Check cache in the background
+          setTimeout(() => {
+              checkCacheStatus().then(result => {
+                  console.log('Cache pre-loaded:', result ? 'SUCCESS' : 'FAILED');
+              });
+          }, 1000);
+          // Create analyze button
+          const analyzeButton = createAnalyzeButton();
+          // Add click event for analyze button
+          analyzeButton.addEventListener('click', async () => {
+              // Extract PGN
+              const pgn = extractPgn();
+              if (pgn) {
+                  // Show loading status
+                  aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Analysiere Partie...</div>';
+                  // Send message to background script
+                  const response = await requestAnalysis(pgn);
+                  if (response.success) {
+                      // Show result
+                      displayAnalysisResult(response.data, aiContent);
+                  }
+                  else {
+                      // Show error
+                      aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">
+            Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
+          </div>`;
+                  }
+              }
+              else {
+                  aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
+              }
+          });
+          // Add the button to the content
+          aiContent.appendChild(analyzeButton);
+          // Set up tab event listeners
+          setupTabEventListeners(mchatElement, allTabs, aiTab, aiContent);
+          // Add click event for AI tab
+          aiTab.addEventListener('click', async () => {
+              // Activate AI tab
+              activateAiTab(mchatElement, aiTab, aiContent);
+              // Show loading indicator
+              aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
+              // Use pre-loaded result if available
+              if (cachedResult) {
+                  console.log('Using pre-loaded cache result');
+                  if (cachedResult.error) {
+                      aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
+                  }
+                  else if (cachedResult.ok) {
+                      displayAnalysisResult(cachedResult, aiContent);
+                  }
+                  else {
+                      aiContent.innerHTML = '';
+                      aiContent.appendChild(analyzeButton);
+                  }
+                  return;
+              }
+              // If no pre-loaded result available, check now
+              const result = await checkCacheStatus();
+              if (!result)
+                  return; // If check is already in progress
+              if (result.error) {
+                  aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
+              }
+              else if (result.ok) {
+                  displayAnalysisResult(result, aiContent);
+              }
+              else {
+                  aiContent.innerHTML = '';
+                  aiContent.appendChild(analyzeButton);
+              }
+          });
+          console.log('AI Analysis tab integration complete');
+      }
+      catch (error) {
+          console.error('Failed to add AI Analysis tab:', error);
+      }
+  }
+  // Initialize when the page is fully loaded
+  window.addEventListener('load', () => {
+      addAiAnalysisTab();
+  });
+  // Fallback: Initialize immediately if page is already loaded
+  if (document.readyState === 'complete') {
+      console.log('Page already loaded, initializing ChessGPT extension...');
+      addAiAnalysisTab();
+  }
+
+})();
+//# sourceMappingURL=content.js.map

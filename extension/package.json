@@ -1,0 +1,24 @@
+{
+  "name": "chess-gpt-extension",
+  "version": "0.1.0",
+  "main": "index.js",
+  "description": "ChessGPT Lichess Integration Extension",
+  "scripts": {
+    "dev": "rollup -c -w",
+    "build": "NODE_ENV=production rollup -c",
+    "check-types": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["chess", "ai", "lichess", "extension"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.3",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@types/chrome": "^0.0.323",
+    "rollup": "^4.41.1",
+    "rollup-plugin-typescript2": "^0.36.0",
+    "typescript": "^5.8.3"
+  }
+}

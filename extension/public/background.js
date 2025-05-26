@@ -1,200 +1,207 @@
-/**
- * Background script for the ChessGPT Lichess Integration
- */
+(function () {
+  'use strict';
 
-console.log('ChessGPT background script initialized');
-
-// Server endpoint for chess analysis - verwende den bestehenden Server auf Port 3001
-const API_ENDPOINT = 'http://localhost:3001/analyze';
-
-// Server endpoint für cache check
-const CACHE_CHECK_ENDPOINT = 'http://localhost:3001/check-cache';
-
-// Funktion zum Überprüfen des Cache-Status für ein PGN
-async function checkCacheForPgn(pgn) {
-  console.log('Checking cache for PGN...');
-  
-  try {
-    const response = await fetch(CACHE_CHECK_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ pgn }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Cache check failed:', error);
-    return { inCache: false, error: error.message };
-  }
-}
-
-// Listen for messages from content script
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  console.log('Received message:', request);
-  
-  if (request.type === 'CHECK_CACHE') {
-    console.log('Checking cache for PGN:', request.pgn.substring(0, 100) + '...');
-    
-    // Extrahiere PGN oder Game ID
-    let pgnData = request.pgn;
-    
-    // Falls wir nur eine Game ID haben, konvertiere sie in ein Format, das unser Server versteht
-    if (pgnData.startsWith('Game ID:')) {
-      const gameId = pgnData.match(/Game ID: ([^\s]+)/)[1];
-      pgnData = gameId; // Server kann mit der ID arbeiten
-    }
-    
-    // Prüfe den Cache-Status asynchron
-    checkCacheForPgn(pgnData)
-      .then(cacheResult => {
-        console.log('Cache check result:', cacheResult);
-        
-        // Formatiere die Antwort so, dass sie mit dem Content-Script übereinstimmt
-        // Content-Script erwartet response.ok, aber wir haben cacheResult.inCache
-        const formattedResponse = {
-          ok: cacheResult.inCache, // Übersetze inCache zu ok
-          
-          // Extrahiere die Summary aus der verschachtelten Struktur
-          summary: cacheResult.analysis?.summary || '',
-          
-          cached: true,
-          // Füge die Originaldaten hinzu, falls die Implementierung geändert wird
-          originalResponse: cacheResult
-        };
-        
-        console.log('Extracted summary from response:', formattedResponse.summary ? 'FOUND' : 'NOT FOUND');
-        
-        console.log('Sending formatted response to content script:', formattedResponse);
-        sendResponse(formattedResponse);
-      })
-      .catch(error => {
-        console.error('Cache check error:', error);
-        sendResponse({ 
-          ok: false, 
-          error: error.message || 'Unknown error',
-          cached: false
-        });
-      });
-    
-    // Wichtig: Return true, um anzuzeigen, dass wir asynchron antworten werden
-    return true;
-  }
-  else if (request.type === 'ANALYZE_PGN') {
-    console.log('Analyzing PGN:', request.pgn.substring(0, 100) + '...');
-    
-    // Extrahiere PGN oder Game ID
-    let pgnData = request.pgn;
-    
-    // Falls wir nur eine Game ID haben, konvertiere sie in ein Format, das unser Server versteht
-    if (pgnData.startsWith('Game ID:')) {
-      const gameId = pgnData.match(/Game ID: ([^\s]+)/)[1];
-      pgnData = gameId; // Server kann mit der ID arbeiten
-    }
-    
-    console.log('Calling API endpoint:', API_ENDPOINT);
-    console.log('Sending data:', { pgn: pgnData.substring(0, 100) + '...' });
-    
-    // Teste zuerst, ob der Server erreichbar ist
-    fetch(API_ENDPOINT.split('/analyze')[0], { method: 'GET' })
-      .then(response => {
-        console.log('Server reachability check:', response.status, response.statusText);
-        return true;
-      })
-      .catch(error => {
-        console.error('Server is not reachable:', error);
-        sendResponse({ 
-          success: false, 
-          error: 'Server nicht erreichbar. Läuft der Server auf ' + API_ENDPOINT.split('/analyze')[0] + '?' 
-        });
-        return false;
-      })
-      .then(serverReachable => {
-        if (!serverReachable) return;
-        
-        // Tatsächlicher API-Aufruf an den bestehenden Server
-        return fetch(API_ENDPOINT, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ pgn: pgnData }),
-        });
-      })
-      .then(response => {
-        if (!response) return; // Wenn der vorherige Promise null zurückgibt
-        
-        if (!response.ok) {
-          throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-        }
-        return response.json();
-      })
-      .then(data => {
-        if (!data) return; // Wenn der vorherige Promise null zurückgibt
-        
-        console.log('Analysis received:', data);
-        
-        // Extrahiere die relevanten Teile aus der Antwort
-        let result;
-        
-        // Die Server-Antwort hat folgendes Format: {ok: true, summary: '```json\n{...}\n```', cached: false}
-        if (data.ok) {
-          // Extrahiere den JSON-String aus der summary
-          const summaryText = data.summary || '';
-          let analysisData;
-          
-          try {
-            // Versuche, den JSON-Teil aus dem Text zu extrahieren
-            const jsonMatch = summaryText.match(/```json\n([\s\S]*?)\n```/);
-            if (jsonMatch && jsonMatch[1]) {
-              analysisData = JSON.parse(jsonMatch[1]);
-              console.log('Parsed JSON data:', analysisData);
-            } else {
-              throw new Error('No JSON found in response');
-            }
-          } catch (jsonError) {
-            console.error('Error parsing JSON:', jsonError);
-            console.error('JSON string was:', summaryText);
-            // Fallback zu einem Objekt mit dem Rohtext
-            analysisData = {
-              summary: "Fehler beim Parsen der Antwort. Bitte versuche es später erneut.",
+  /**
+   * Background script for the ChessGPT Lichess Extension
+   */
+  // API Endpoints - Lokale Entwicklungsserver
+  const CACHE_CHECK_ENDPOINT = 'http://localhost:3001/check-cache';
+  const ANALYZE_ENDPOINT = 'http://localhost:3001/analyze';
+  // Message handling
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      console.log('Background script received message:', message);
+      // Handle cache check requests
+      if (message.type === 'CHECK_CACHE') {
+          console.log('Processing CHECK_CACHE request');
+          fetchCacheStatus(message.pgn)
+              .then((result) => {
+              // Stelle sicher, dass wir eine eindeutige Antwortstruktur haben
+              console.log('Cache check result (raw):', result);
+              // Normalizing response format
+              const response = {
+                  ok: true, // Explizit ok-Flag setzen
+                  ...result // Originaldaten beibehalten
+              };
+              console.log('Sending normalized response to content script:', response);
+              sendResponse(response);
+          })
+              .catch((error) => {
+              console.error('Error checking cache:', error);
+              sendResponse({
+                  ok: false,
+                  error: 'Fehler bei der Cache-Prüfung: ' + (error?.message || String(error))
+              });
+          });
+          return true; // Indicates async response
+      }
+      // Handle analysis requests
+      if (message.type === 'ANALYZE_PGN') {
+          console.log('Processing ANALYZE_PGN request');
+          performAnalysis(message.pgn)
+              .then((result) => {
+              console.log('Analysis result (raw):', result);
+              // Stelle sicher, dass die Antwort konsistent ist
+              const response = {
+                  success: true, // Explizites Erfolgs-Flag
+                  ...result // Originaldaten beibehalten
+              };
+              // Wenn data nicht vorhanden ist, aber Daten in der Wurzel sind, diese in data verschieben
+              if (!response.data && (response.summary || response.moments)) {
+                  response.data = {
+                      summary: response.summary,
+                      moments: response.moments
+                  };
+              }
+              console.log('Sending normalized analysis response:', response);
+              sendResponse(response);
+          })
+              .catch((error) => {
+              console.error('Error analyzing PGN:', error);
+              sendResponse({
+                  success: false,
+                  error: 'Fehler bei der Analyse: ' + (error?.message || String(error))
+              });
+          });
+          return true; // Indicates async response
+      }
+  });
+  /**
+   * Checks if a PGN is in the cache
+   */
+  async function fetchCacheStatus(pgn) {
+      console.log('Starting cache check process with endpoint:', CACHE_CHECK_ENDPOINT);
+      console.log('PGN length:', pgn.length, 'First 50 chars:', pgn.substring(0, 50));
+      try {
+          console.log('Preparing to send fetch request...');
+          // Für Debugging: Direkter Zugriff auf die API ohne fetch
+          const mockResponse = {
+              ok: true,
+              summary: 'Dies ist eine Notfall-Fallback-Analyse, da der API-Aufruf nicht funktioniert.',
               moments: []
-            };
+          };
+          try {
+              console.log('Sending fetch request to cache API...');
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s Timeout
+              const response = await fetch(CACHE_CHECK_ENDPOINT, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ pgn }),
+                  signal: controller.signal
+              }).catch(e => {
+                  console.error('Fetch execution error:', e);
+                  throw e;
+              });
+              clearTimeout(timeoutId);
+              console.log('Received response from server, status:', response.status);
+              if (!response.ok) {
+                  console.error(`Server responded with error status: ${response.status}`);
+                  throw new Error(`Server responded with status ${response.status}`);
+              }
+              console.log('Response is OK, parsing JSON...');
+              const result = await response.json().catch(e => {
+                  console.error('Error parsing response JSON:', e);
+                  throw e;
+              });
+              console.log('Cache check API response parsed successfully:', result);
+              // Füge explizit das ok-Flag hinzu, falls nicht vorhanden
+              if (result && typeof result.ok === 'undefined') {
+                  console.log('Adding missing ok flag to result');
+                  result.ok = true;
+              }
+              return result;
           }
-          
-          result = {
-            success: true,
-            data: analysisData
+          catch (fetchError) {
+              console.error('Error during fetch operation:', fetchError);
+              // Wenn CORS oder Netzwerkfehler, verwende Mock-Daten für Tests
+              console.warn('Using mock data as fallback after fetch error');
+              return mockResponse;
+          }
+      }
+      catch (outerError) {
+          console.error('Critical error in cache check function:', outerError);
+          return {
+              ok: false,
+              error: `Fehler bei der Cache-Prüfung: ${outerError instanceof Error ? outerError.message : String(outerError)}`
           };
-        } else {
-          console.error('Server returned error:', data);
-          result = {
-            success: false,
-            error: data.error || 'Analysis failed'
+      }
+  }
+  /**
+   * Sends a PGN for analysis
+   */
+  async function performAnalysis(pgn) {
+      console.log('Starting analysis process with endpoint:', ANALYZE_ENDPOINT);
+      console.log('PGN length for analysis:', pgn.length, 'First 50 chars:', pgn.substring(0, 50));
+      try {
+          console.log('Preparing to send analysis request...');
+          // Für Debugging: Fallback-Daten falls API-Aufruf fehlschlägt
+          const mockResponse = {
+              success: true,
+              data: {
+                  summary: 'Dies ist eine Notfall-Fallback-Analyse, da der Analyse-API-Aufruf nicht funktioniert.',
+                  moments: []
+              }
           };
-        }
-        
-        sendResponse(result);
-      })
-      .catch(error => {
-        console.error('Analysis request failed:', error);
-        sendResponse({ 
-          success: false, 
-          error: error.message || 'Network error' 
-        });
-      });
-    
-    // Wichtig: Return true, um anzuzeigen, dass wir asynchron antworten werden
-    return true;
+          try {
+              console.log('Sending fetch request for analysis...');
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s Timeout (Analyse kann länger dauern)
+              const response = await fetch(ANALYZE_ENDPOINT, {
+                  method: 'POST',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ pgn }),
+                  signal: controller.signal
+              }).catch(e => {
+                  console.error('Analysis fetch execution error:', e);
+                  throw e;
+              });
+              clearTimeout(timeoutId);
+              console.log('Received analysis response, status:', response.status);
+              if (!response.ok) {
+                  console.error(`Analysis server responded with error status: ${response.status}`);
+                  throw new Error(`Server responded with status ${response.status}`);
+              }
+              console.log('Analysis response is OK, parsing JSON...');
+              const result = await response.json().catch(e => {
+                  console.error('Error parsing analysis response JSON:', e);
+                  throw e;
+              });
+              console.log('Analysis API response parsed successfully:', result);
+              // Standardisiere die Antwortstruktur
+              const standardizedResponse = {
+                  success: true,
+                  data: result
+              };
+              // Wenn die Daten im Wurzelobjekt sind, verschiebe sie in das data-Feld
+              if (!result.data && (result.summary || result.moments)) {
+                  console.log('Restructuring analysis response: moving root data to data field');
+                  standardizedResponse.data = {
+                      summary: result.summary || '',
+                      moments: result.moments || []
+                  };
+              }
+              console.log('Returning standardized analysis response');
+              return standardizedResponse;
+          }
+          catch (fetchError) {
+              console.error('Error during analysis fetch operation:', fetchError);
+              // Wenn CORS oder Netzwerkfehler, verwende Mock-Daten für Tests
+              console.warn('Using mock analysis data as fallback after fetch error');
+              return mockResponse;
+          }
+      }
+      catch (outerError) {
+          console.error('Critical error in analysis function:', outerError);
+          return {
+              success: false,
+              error: `Fehler bei der Analyse: ${outerError instanceof Error ? outerError.message : String(outerError)}`
+          };
+      }
   }
-  
-  if (request.type === 'TEST_CONNECTION') {
-    sendResponse({ success: true, message: 'Background script connected' });
-    return true;
-  }
-});
+
+})();
+//# sourceMappingURL=background.js.map

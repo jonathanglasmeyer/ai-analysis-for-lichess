@@ -6,6 +6,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   const statusElement = document.getElementById('status');
   
+  // Prüfe, ob das Element existiert
+  if (!statusElement) {
+    console.error('Status element not found');
+    return;
+  }
+  
   // Check if we're on Lichess
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const currentUrl = tabs[0]?.url || '';

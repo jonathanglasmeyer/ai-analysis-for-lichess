@@ -9,6 +9,10 @@ dist-ssr/
 build/
 out/
 
+# Extension compiled output
+extension/public/*.js
+extension/public/*.js.map
+
 # Cache and logs
 .cache/
 .temp/

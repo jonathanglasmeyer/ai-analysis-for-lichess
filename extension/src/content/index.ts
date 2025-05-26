@@ -129,7 +129,7 @@ async function createAnalysis() {
     
     // Show error message
     const aiPanel = document.querySelector('.ai-analysis-panel') as HTMLElement;
-    aiPanel.innerHTML = `<div class="error">Fehler bei der Analyse: ${error.message}</div>`;
+    aiPanel.innerHTML = `<div class="error">Fehler bei der Analyse: ${error instanceof Error ? error.message : String(error)}</div>`;
   }
 }
 
