@@ -361,8 +361,8 @@
       const normalizedData = normalizeAnalysisData(result);
       // Display analysis summary
       container.innerHTML = `
-    <div style="padding: 20px;">
-      <h3 style="margin-top: 0;">Analyse-Zusammenfassung</h3>
+    <div>
+      
       <p style="white-space: pre-line;">${normalizedData.summary || 'Keine Zusammenfassung verfügbar'}</p>
       
       <div class="ai-moments-info" style="margin-top: 15px; font-size: 0.9em; color: #666;">
