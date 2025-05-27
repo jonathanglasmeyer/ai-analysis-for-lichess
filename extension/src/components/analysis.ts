@@ -118,6 +118,249 @@ const styles = {
 };
 
 /**
+ * Konvertiert Zugnotationen in klickbare Links
+ * Erkennt Formate wie [14. Qxd8] oder [14...Qxd8]
+ */
+function convertMovesToLinks(text: string): HTMLDivElement {
+  // Regex für Zugnotationen im Format [Zugnummer. Notation] oder [Zugnummer... Notation]
+  const moveRegex = /\[(\d+)\s*(\.{1,3})\s*([^\]]+)\]/g;
+  
+  // Container für den HTML-Inhalt
+  const container = document.createElement('div');
+  
+  // Text in Segmente aufteilen und Links einfügen
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = moveRegex.exec(text)) !== null) {
+    // Text vor dem Match hinzufügen
+    if (match.index > lastIndex) {
+      const textNode = document.createTextNode(text.substring(lastIndex, match.index));
+      container.appendChild(textNode);
+    }
+    
+    // Zugnotation extrahieren
+    const moveNumber = match[1]; // z.B. "14"
+    const dots = match[2];       // z.B. "." oder "..."
+    const notation = match[3];   // z.B. "Qxd8"
+    
+    // Link erstellen
+    const moveLink = document.createElement('a');
+    moveLink.href = '#';
+    moveLink.className = 'move-link';
+    
+    // Erstelle den Linktext OHNE eckige Klammern
+    moveLink.textContent = `${moveNumber}${dots} ${notation}`; // z.B. "14. Qxd8" statt "[14. Qxd8]"
+    
+    moveLink.style.backgroundColor = 'rgba(128, 90, 213, 0.1)'; // Leichter lila Hintergrund
+    moveLink.style.borderRadius = '3px';
+    moveLink.style.padding = '0 3px';
+    moveLink.style.textDecoration = 'none';
+    moveLink.style.color = 'inherit';
+    
+    // Daten zum Zug speichern für Event-Handler
+    moveLink.dataset.moveNumber = moveNumber;
+    moveLink.dataset.isWhite = dots === '.' ? 'true' : 'false';
+    moveLink.dataset.notation = notation.trim();
+    
+    // Verhindere Standard-Link-Verhalten
+    moveLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      navigateToMove(moveLink.dataset.moveNumber, moveLink.dataset.isWhite === 'true', moveLink.dataset.notation);
+    });
+    
+    container.appendChild(moveLink);
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Rest des Textes hinzufügen
+  if (lastIndex < text.length) {
+    const textNode = document.createTextNode(text.substring(lastIndex));
+    container.appendChild(textNode);
+  }
+  
+  return container;
+}
+
+/**
+ * Navigiert zu einem bestimmten Zug in der Lichess-Oberfläche
+ */
+function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notation: string | undefined): void {
+  console.log(`Navigating to move: ${moveNumber}${isWhite ? '.' : '...'} ${notation}`);
+  
+  if (!moveNumber) return;
+  if (!notation) return;
+  
+  // Konvertiere moveNumber zu Integer
+  const moveNum = parseInt(moveNumber, 10);
+  if (isNaN(moveNum)) return;
+  
+  // Berechne die Halbzugnummer (ply)
+  // Jeder vollständige Zug besteht aus zwei Halbzügen (weiß und schwarz)
+  // Weiße Züge sind ungerade, schwarze Züge sind gerade
+  const ply = (moveNum - 1) * 2 + (isWhite ? 1 : 2);
+  
+  try {
+    // Hilfsfunktion für DOM-Navigation
+    const findAndClickMove = () => {
+      // Finde das richtige Element in der Zugliste
+      const moveContainer = document.querySelector('.tview2');
+      if (!moveContainer) {
+        console.error('Move container not found');
+        return false;
+      }
+      
+      const notationClean = notation.trim();
+      let targetMove: Element | null = null;
+      
+      // METHODE 1: Suche nach dem SAN-Element innerhalb der move-Elemente
+      const sanElements = moveContainer.querySelectorAll('move san');
+      for (const san of Array.from(sanElements)) {
+        if (san.textContent && san.textContent.trim() === notationClean) {
+          // Finde das übergeordnete move-Element
+          const moveParent = san.closest('move');
+          if (moveParent) {
+            // Prüfe, ob es zum richtigen Zug gehört (weiß/schwarz)
+            const indexElem = moveParent.previousElementSibling;
+            if (indexElem && indexElem.tagName.toLowerCase() === 'index') {
+              const indexText = indexElem.textContent || '';
+              const numberMatch = indexText.match(/(\d+)/);
+              if (numberMatch && parseInt(numberMatch[1], 10) === moveNum) {
+                targetMove = moveParent;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // METHODE 2: Suche nach move-Elementen direkt
+      if (!targetMove) {
+        const moves = moveContainer.querySelectorAll('move');
+        for (const move of Array.from(moves)) {
+          // Prüfe zuerst auf san-Element im move
+          const sanElem = move.querySelector('san');
+          if (sanElem && sanElem.textContent && sanElem.textContent.trim() === notationClean) {
+            // Für schwarze Züge: Prüfe vorheriges Element auf index mit richtiger Nummer
+            if (!isWhite) {
+              let prev = move.previousElementSibling;
+              while (prev) {
+                if (prev.tagName.toLowerCase() === 'index' && 
+                    prev.textContent && prev.textContent.includes(moveNumber)) {
+                  targetMove = move;
+                  break;
+                }
+                prev = prev.previousElementSibling;
+              }
+            } 
+            // Für weiße Züge: Prüfe vorheriges Element direkt
+            else if (move.previousElementSibling && 
+                     move.previousElementSibling.tagName.toLowerCase() === 'index' && 
+                     move.previousElementSibling.textContent && 
+                     move.previousElementSibling.textContent.includes(moveNumber)) {
+              targetMove = move;
+              break;
+            }
+          } 
+          // Prüfe direkt auf move-Text
+          else if (move.textContent && move.textContent.includes(notationClean)) {
+            // Ist es ein weißer Zug direkt nach einer Indexnummer?
+            if (isWhite && move.previousElementSibling && 
+                move.previousElementSibling.tagName.toLowerCase() === 'index' && 
+                move.previousElementSibling.textContent && 
+                move.previousElementSibling.textContent.includes(moveNumber)) {
+              targetMove = move;
+              break;
+            }
+            // Ist es ein schwarzer Zug nach einem weißen Zug?
+            else if (!isWhite && move.previousElementSibling && 
+                     move.previousElementSibling.textContent && 
+                     move.previousElementSibling.tagName.toLowerCase() === 'move') {
+              const prevIndex = move.previousElementSibling.previousElementSibling;
+              if (prevIndex && prevIndex.textContent && 
+                  prevIndex.tagName.toLowerCase() === 'index' && 
+                  prevIndex.textContent.includes(moveNumber)) {
+                targetMove = move;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // METHODE 3: Versuche eine direkte Zuordnung über die Indexnummer
+      if (!targetMove) {
+        const indexElems = moveContainer.querySelectorAll('index');
+        for (const indexElem of Array.from(indexElems)) {
+          if (indexElem.textContent && indexElem.textContent.includes(moveNumber)) {
+            let moveElem;
+            // Für weißen Zug nehmen wir das direkt folgende Element
+            if (isWhite) {
+              moveElem = indexElem.nextElementSibling;
+            } 
+            // Für schwarzen Zug nehmen wir das übernächste Element
+            else {
+              moveElem = indexElem.nextElementSibling?.nextElementSibling;
+            }
+            
+            if (moveElem && moveElem.tagName.toLowerCase() === 'move') {
+              // Noch einmal den Text prüfen, wenn möglich
+              const moveText = moveElem.textContent || '';
+              if (moveText.includes(notationClean) || !notation) {
+                targetMove = moveElem;
+                break;
+              }
+            }
+          }
+        }
+      }
+      
+      // Klick auf den Zug auslösen, wenn gefunden
+      if (targetMove) {
+        console.log('Found target move:', targetMove);
+        
+        // Zum Element scrollen
+        targetMove.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // 1. Markiere alle aktiven Züge als inaktiv
+        const activeMoves = moveContainer.querySelectorAll('move.active');
+        activeMoves.forEach(m => m.classList.remove('active'));
+        
+        // 2. Markiere den ausgewählten Zug als aktiv
+        targetMove.classList.add('active');
+        
+        // 3. Simuliere einen Mausklick auf den Zug
+        setTimeout(() => {
+          const mouseEvent = new MouseEvent('mousedown', {
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          targetMove!.dispatchEvent(mouseEvent);
+        }, 100);
+        
+        return true;
+      }
+      
+      console.warn(`Move not found: ${moveNumber}${isWhite ? '.' : '...'} ${notation}`);
+      return false;
+    };
+    
+    // Versuche die DOM-Navigation
+    if (!findAndClickMove()) {
+      // Wenn es nicht sofort klappt, warte kurz und versuche es noch einmal
+      // (manchmal braucht Lichess einen Moment, um die DOM-Struktur zu aktualisieren)
+      setTimeout(() => {
+        findAndClickMove();
+      }, 300);
+    }
+  } catch (error) {
+    console.error('Error navigating to move:', error);
+  }
+}
+
+/**
  * Displays the analysis result in the content panel
  */
 export function displayAnalysisResult(result: any, container: HTMLElement): void {
@@ -154,7 +397,10 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
     summaryContainer.style.padding = '10px';
     summaryContainer.style.margin = '0';
     summaryContainer.style.overflowWrap = 'break-word';
-    summaryContainer.textContent = normalizedData.summary;
+    
+    // Statt einfachem Text nun formatierte Links für Zugnotationen verwenden
+    const formattedContent = convertMovesToLinks(normalizedData.summary);
+    summaryContainer.appendChild(formattedContent);
     
     analysisContent.appendChild(summaryContainer);
     
