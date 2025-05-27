@@ -15,6 +15,35 @@ const LICHESS_TABS_SELECTOR = '.mchat__tabs';
 // Global variables
 let cachedResult: CacheCheckResponse | null = null;
 let isCacheCheckInProgress = false;
+let aiContentElement: HTMLElement | null = null;
+
+/**
+ * Startet die Analyse einer Schachpartie
+ */
+async function startAnalysis(contentElement: HTMLElement): Promise<void> {
+  // Extract PGN
+  const pgn = extractPgn();
+  
+  if (pgn) {
+    // Show loading status
+    contentElement.innerHTML = '<div style="padding: 20px; color: #666;">Analysiere Partie...</div>';
+    
+    // Send message to background script
+    const response = await requestAnalysis(pgn);
+    
+    if (response.success) {
+      // Show result
+      displayAnalysisResult(response.data, contentElement);
+    } else {
+      // Show error
+      contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">
+        Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
+      </div>`;
+    }
+  } else {
+    contentElement.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
+  }
+}
 
 /**
  * Adds the AI Analysis tab to the Lichess sidebar
@@ -26,6 +55,17 @@ async function addAiAnalysisTab(): Promise<void> {
     // Run DOM analysis immediately and after a delay (for dynamically loaded content)
     analyzeDOM();
     setTimeout(analyzeDOM, 2000);
+    
+    // Event-Listener für den 'NEUE ANALYSE ERSTELLEN'-Button
+    document.addEventListener('chess-gpt-start-analysis', (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const container = customEvent.detail?.container;
+      
+      if (container) {
+        console.log('Neuen Analyse-Request erhalten');
+        startAnalysis(container);
+      }
+    });
     
     console.log('Initializing AI Analysis tab...');
     
@@ -115,30 +155,11 @@ async function addAiAnalysisTab(): Promise<void> {
     // Create analyze button
     const analyzeButton = createAnalyzeButton();
     
-    // Add click event for analyze button
-    analyzeButton.addEventListener('click', async () => {
-      // Extract PGN
-      const pgn = extractPgn();
-      
-      if (pgn) {
-        // Show loading status
-        aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Analysiere Partie...</div>';
-        
-        // Send message to background script
-        const response = await requestAnalysis(pgn);
-        
-        if (response.success) {
-          // Show result
-          displayAnalysisResult(response.data, aiContent);
-        } else {
-          // Show error
-          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">
-            Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
-          </div>`;
-        }
-      } else {
-        aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
-      }
+    // Benutze die globale startAnalysis-Funktion
+
+// Add click event for analyze button
+    analyzeButton.addEventListener('click', () => {
+      startAnalysis(aiContent);
     });
     
     // Add the button to the content
@@ -152,34 +173,66 @@ async function addAiAnalysisTab(): Promise<void> {
       // Activate AI tab
       activateAiTab(mchatElement, aiTab as HTMLElement, aiContent);
       
-      // Show loading indicator
-      aiContent.innerHTML = '<div style="padding: 20px; color: #666;">Lade KI-Analyse...</div>';
+      // Show loading indicator with explanation
+      aiContent.innerHTML = `
+        <div style="padding: 20px; text-align: center;">
+          <div style="margin-bottom: 15px; color: #666;">
+            <p>Prüfe Cache...</p>
+            <p style="font-size: 0.9em; margin-top: 8px;">Suche nach bestehenden Analysen für diese Partie.</p>
+          </div>
+          <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border: 3px solid rgba(128, 90, 213, 0.3); border-radius: 50%; border-top-color: #805AD5; animation: spin 1s ease-in-out infinite;"></div>
+        </div>
+        <style>
+          @keyframes spin { to { transform: rotate(360deg); } }
+        </style>
+      `;
       
-      // Use pre-loaded result if available
-      if (cachedResult) {
-        console.log('Using pre-loaded cache result');
-        if (cachedResult.error) {
-          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cachedResult.error}</div>`;
-        } else if (cachedResult.ok) {
-          displayAnalysisResult(cachedResult, aiContent);
+      // Zuerst im Cache prüfen, um mehrfache API-Calls zu vermeiden
+      console.log('Checking cache from tab click...');
+      const cacheResult = await checkCacheStatus();
+      
+      // Wenn der Cache keine Ergebnisse hat, neue Analyse starten
+      if (cacheResult && cacheResult.ok && !cacheResult.inCache) {
+        console.log('No cache found, starting new analysis');
+        
+        // Ladeanzeige aktualisieren
+        aiContent.innerHTML = `
+          <div style="padding: 20px; text-align: center;">
+            <div style="margin-bottom: 15px; color: #666;">
+              <p>Erstelle neue Analyse...</p>
+              <p style="font-size: 0.9em; margin-top: 8px;">Die KI analysiert deine Partie. Dies kann einen Moment dauern.</p>
+            </div>
+            <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border: 3px solid rgba(128, 90, 213, 0.3); border-radius: 50%; border-top-color: #805AD5; animation: spin 1s ease-in-out infinite;"></div>
+          </div>
+        `;
+        
+        const pgn = extractPgn();
+        
+        if (pgn) {
+          const response = await requestAnalysis(pgn);
+          
+          if (response.success) {
+            // Show result
+            displayAnalysisResult(response.data, aiContent);
+          } else {
+            // Show error
+            aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">
+              Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
+            </div>`;
+          }
         } else {
-          aiContent.innerHTML = '';
-          aiContent.appendChild(analyzeButton);
+          aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
         }
-        return;
-      }
-      
-      // If no pre-loaded result available, check now
-      const result = await checkCacheStatus();
-      if (!result) return; // If check is already in progress
-      
-      if (result.error) {
-        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${result.error}</div>`;
-      } else if (result.ok) {
-        displayAnalysisResult(result, aiContent);
+      } else if (cacheResult && cacheResult.ok && cacheResult.inCache) {
+        // Cache-Ergebnis anzeigen
+        console.log('Using cache result found');
+        displayAnalysisResult(cacheResult, aiContent);
+      } else if (cacheResult && cacheResult.error) {
+        // Fehler anzeigen
+        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cacheResult.error}</div>`;
       } else {
-        aiContent.innerHTML = '';
-        aiContent.appendChild(analyzeButton);
+        // Fallback für unerwartete Situationen
+        aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">Unerwarteter Fehler bei der Analyse</div>';
       }
     });
     

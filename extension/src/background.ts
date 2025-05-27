@@ -87,7 +87,7 @@ async function fetchCacheStatus(pgn: string) {
     // Für Debugging: Direkter Zugriff auf die API ohne fetch
     const mockResponse = {
       ok: true,
-      summary: 'Dies ist eine Notfall-Fallback-Analyse, da der API-Aufruf nicht funktioniert.',
+      summary: '',
       moments: []
     };
     
@@ -169,7 +169,7 @@ async function performAnalysis(pgn: string) {
     try {
       console.log('Sending fetch request for analysis...');
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s Timeout (Analyse kann länger dauern)
+      const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s Timeout (2 Minuten) für die Analyse, da Anthropic länger brauchen kann
       
       const response = await fetch(ANALYZE_ENDPOINT, {
         method: 'POST',

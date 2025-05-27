@@ -101,6 +101,13 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
   return normalized;
 }
 
+// Stil-Konstanten für einheitliches Design
+const styles = {
+  container: `margin: 0; padding: 10px;`,
+  emptyState: `color: #666; text-align: center; padding: 20px 0;`,
+  infoText: `margin-top: 15px; font-size: 0.9em; color: #666;`
+};
+
 /**
  * Displays the analysis result in the content panel
  */
@@ -108,15 +115,29 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   // Normalize data from different formats
   const normalizedData = normalizeAnalysisData(result);
   
-  // Display analysis summary
+  // Bestimme, ob es eine richtige Analyse ist oder nur ein leerer/Fehler-Zustand
+  const hasAnalysis = normalizedData.summary && normalizedData.summary.trim().length > 0;
+  
+  // Display analysis summary or empty state
   container.innerHTML = `
-    <div>
-      
-      <p style="white-space: pre-line;">${normalizedData.summary || 'Keine Zusammenfassung verfügbar'}</p>
-      
-      <div class="ai-moments-info" style="margin-top: 15px; font-size: 0.9em; color: #666;">
-        <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
-      </div>
+    <div class="chess-gpt-analysis-content" style="${styles.container}">
+      ${hasAnalysis 
+        ? `
+          <div class="analysis-content">
+            <p style="white-space: pre-line;">${normalizedData.summary}</p>
+            
+            ${normalizedData.moments && normalizedData.moments.length > 0 
+              ? `<div class="ai-moments-info" style="${styles.infoText}">
+                  <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
+                </div>` 
+              : ''}
+          </div>
+        ` 
+        : `<div class="empty-analysis" style="${styles.emptyState}">
+            <p>Keine Analyse verfügbar.</p>
+            <p style="font-size: 0.9em; margin-top: 8px;">Wechsle zu einem anderen Tab und zurück, um eine Analyse zu starten.</p>
+          </div>`
+      }
     </div>
   `;
   

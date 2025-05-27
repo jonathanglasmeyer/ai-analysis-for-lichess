@@ -9,6 +9,9 @@ const ANALYZE_ENDPOINT = 'https://chessgpt.com/api/analyze';
 export interface CacheCheckResponse {
   ok?: boolean;
   error?: string;
+  inCache?: boolean;
+  summary?: string;
+  moments?: AnalysisMoment[];
   originalResponse?: {
     analysis?: {
       summary?: string;
