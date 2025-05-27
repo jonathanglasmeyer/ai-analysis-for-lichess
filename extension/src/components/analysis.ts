@@ -361,92 +361,26 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
 }
 
 /**
- * Displays the analysis result in the content panel
- */
-export function displayAnalysisResult(result: any, container: HTMLElement): void {
-  // Normalize data from different formats
-  const normalizedData = normalizeAnalysisData(result);
-  
-  // Bestimme, ob es eine richtige Analyse ist oder nur ein leerer/Fehler-Zustand
-  const hasAnalysis = normalizedData.summary && normalizedData.summary.trim().length > 0;
-  
-  // Leere den Container und setze die Grundstile
-  container.innerHTML = '';
-  container.style.padding = '0';
-  container.style.margin = '0';
-  
-  const content = document.createElement('div');
-  content.className = 'chess-gpt-analysis-content';
-  content.style.padding = '0';
-  content.style.margin = '0';
-  
-  if (hasAnalysis) {
-    // Analyse-Inhalt erstellen
-    const analysisContent = document.createElement('div');
-    analysisContent.className = 'analysis-content';
-    analysisContent.style.margin = '0';
-    analysisContent.style.padding = '10px';
-    
-    // Scrollbaren Container für die Zusammenfassung erstellen
-    const summaryContainer = document.createElement('div');
-    summaryContainer.className = 'summary-container';
-    summaryContainer.style.maxHeight = '350px';
-    summaryContainer.style.overflowY = 'auto';
-    summaryContainer.style.fontSize = '95%';
-    summaryContainer.style.whiteSpace = 'pre-line';
-    summaryContainer.style.padding = '10px';
-    summaryContainer.style.margin = '0';
-    summaryContainer.style.overflowWrap = 'break-word';
-    
-    // Statt einfachem Text nun formatierte Links für Zugnotationen verwenden
-    const formattedContent = convertMovesToLinks(normalizedData.summary);
-    summaryContainer.appendChild(formattedContent);
-    
-    analysisContent.appendChild(summaryContainer);
-    
-    
-    content.appendChild(analysisContent);
-  } else {
-    // Leerer Zustand
-    const emptyState = document.createElement('div');
-    emptyState.className = 'empty-analysis';
-    emptyState.style.color = '#666';
-    emptyState.style.textAlign = 'center';
-    emptyState.style.padding = '20px 0';
-    
-    const noAnalysisText = document.createElement('p');
-    noAnalysisText.textContent = 'Keine Analyse verfügbar.';
-    emptyState.appendChild(noAnalysisText);
-    
-    const hintText = document.createElement('p');
-    hintText.style.fontSize = '0.9em';
-    hintText.style.marginTop = '8px';
-    hintText.textContent = 'Wechsle zu einem anderen Tab und zurück, um eine Analyse zu starten.';
-    emptyState.appendChild(hintText);
-    
-    content.appendChild(emptyState);
-  }
-  
-  // Container mit Content füllen
-  container.appendChild(content);
-  
-  // Implement highlights in the move list if moments are available
-  if (normalizedData.moments && normalizedData.moments.length > 0) {
-    console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
-    // Find the move list
-    const moveListContainer = document.querySelector('.tview2');
-    if (moveListContainer) {
-      highlightMovesInMoveList(moveListContainer as HTMLElement, normalizedData.moments);
-    } else {
-      console.error('Move list container not found');
-    }
-  } else {
-    console.log('No moments to highlight');
-  }
-}
-
-/**
- * Highlights moves in the move list based on the analysis moments
+ * Highlights moves in the Lichess move list and integrates AI comments and interrupts.
+ * 
+ * This function handles the complex DOM manipulation required to:
+ * 1. Parse Lichess move structure and calculate ply values
+ * 2. Insert AI comments into existing or new interrupt elements  
+ * 3. Create empty moves for proper display structure when AI/native interrupts are present
+ * 
+ * The process order is critical:
+ * - First: Build ply-to-moveElement mapping (plyByMoveEl)
+ * - Second: Process AI comments and create interrupts
+ * - Third: Create empty moves (must be last to avoid cleanup removal)
+ * 
+ * Key challenges solved:
+ * - Lichess uses encoded 'p' attributes on move elements (not searchable via CSS selectors)
+ * - Empty moves must respect existing native Lichess empty moves to prevent duplicates
+ * - Fuzzy matching for ply values to handle discrepancies between calculated and expected values
+ * - Complex DOM structure with variants, lines, and interrupts that must be navigated carefully
+ * 
+ * @param moveListContainer - The container element of the Lichess move list
+ * @param moments - Array of chess analysis moments with AI comments
  */
 export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments: AnalysisMoment[]): void {
   if (!moveListContainer || !moments || moments.length === 0) {
@@ -536,7 +470,6 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       if (numberMatch) {
         currentFullMoveNumber = parseInt(numberMatch[1], 10);
         lastIndexContent = indexText;
-        console.log(`Found index: ${indexText}, set current move to ${currentFullMoveNumber}`);
       }
     });
     
@@ -570,9 +503,8 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
             if (newIndexNumber !== lastIndexNumber) {
               lastIndexNumber = newIndexNumber;
               currentMoveColor = 'white'; // Nach einem neuen Index kommt immer ein weißer Zug
-              console.log(`Found new index ${newIndexNumber}, resetting to white for ${moveText}`);
             } else {
-              console.log(`Found same index ${newIndexNumber}, keeping currentMoveColor=${currentMoveColor} for ${moveText}`);
+              currentMoveColor = 'black'; // Nach einem weißen Zug kommt immer ein schwarzer Zug
             }
             foundIndex = true;
             break;
@@ -583,7 +515,6 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       }
       
       if (!foundIndex) {
-        console.log(`No index found for ${moveText}, currentMoveColor=${currentMoveColor}, lastIndexNumber=${lastIndexNumber}`);
       }
       
       // Stelle sicher, dass wir einen Eintrag für diesen Vollzug haben
@@ -597,33 +528,24 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         // Das ist der weiße Zug für diesen Vollzug
         moveData.white = moveEl;
         currentMoveColor = 'black'; // Nächster Zug wird schwarz sein
-        console.log(`Weißer Zug: ${moveText} für Vollzug ${lastIndexNumber}`);
       } else if (currentMoveColor === 'black' && !moveData.black) {
         // Das ist der schwarze Zug für diesen Vollzug
         moveData.black = moveEl;
         currentMoveColor = 'white'; // Nach schwarz kommt der nächste Vollzug (weiß)
-        console.log(`Schwarzer Zug: ${moveText} für Vollzug ${lastIndexNumber}`);
       } else {
-        console.log(`Unerwarteter Zug: ${moveText} (currentMoveColor: ${currentMoveColor}, lastIndexNumber: ${lastIndexNumber})`);
       }
     });
     
-    // Jetzt die AI-Kommentare einfügen, basierend auf den berechneten PLY-Werten
+    // Ply-Zuordnung wieder hinzufügen
     for (const [fullMoveNumber, moves] of movesByFullMoveNumber.entries()) {
       if (moves.white) {
         const ply = 2 * fullMoveNumber - 1; // Weiße Züge: 1, 3, 5, 7, 9, 11, 13...
         plyByMoveEl.set(moves.white, ply);
-        
-        const moveText = moves.white.querySelector('san')?.textContent || moves.white.textContent || '';
-        console.log(`White move: ${moveText}, fullMove: ${fullMoveNumber}, ply: ${ply}, has moment: ${!!momentsByPly[ply]}`);
       }
       
       if (moves.black) {
         const ply = 2 * fullMoveNumber; // Schwarze Züge: 2, 4, 6, 8, 10, 12, 14...
         plyByMoveEl.set(moves.black, ply);
-        
-        const moveText = moves.black.querySelector('san')?.textContent || moves.black.textContent || '';
-        console.log(`Black move: ${moveText}, fullMove: ${fullMoveNumber}, ply: ${ply}, has moment: ${!!momentsByPly[ply]}`);
       }
     }
     
@@ -648,7 +570,6 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
             
             // Wenn der Zugtext übereinstimmt oder zumindest sehr ähnlich ist
             if (trimmedMoveText.includes(trimmedMomentMove) || trimmedMomentMove.includes(trimmedMoveText)) {
-              console.log(`Fuzzy match: Move '${trimmedMoveText}' matched with moment '${trimmedMomentMove}' at ply ${nearbyPly} instead of ${ply}`);
               moment = nearbyMoment;
               break;
             }
@@ -658,22 +579,17 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       
       // Immer noch kein Moment gefunden?
       if (!moment) {
-        console.log(`No moment found for move ${moveEl.textContent} (ply ${ply})`);
         return; // Kein wichtiger Moment für diesen Zug
       }
-      
-      console.log(`Processing move ${moveEl.textContent} with ply ${ply}, found moment: ply ${moment.ply}, move: ${moment.move}`);
       
       // Prüfe, ob dieser Moment bereits gerendert wurde (Anti-Duplikat-Schutz)
       const momentId = `ply-${moment.ply}-${moment.move}`;
       if (document.querySelector(`[data-moment-id="${momentId}"]`)) {
-        console.log(`Moment already rendered for ply ${moment.ply}, move ${moment.move}. Skipping.`);
         return;
       }
       
       // Prüfe, ob es sich um einen Variantenzug handelt
       if (moveEl.closest('lines') || moveEl.closest('line') || moveEl.closest('branch')) {
-        console.log(`Skipping variant move: ${moveEl.textContent}`);
         return;
       }
 
@@ -694,14 +610,12 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         // Check if there's already an AI comment
         const existingAIComment = interruptElement.querySelector('.ai-comment');
         if (existingAIComment) {
-          console.log('AI comment already exists for move:', moveEl.textContent);
           return;
         }
       }
       
       // If no existing interrupt found, create one
       if (!interruptElement) {
-        console.log(`Creating new interrupt for ${moveEl.textContent} (ply ${ply})`);
         interruptElement = document.createElement('interrupt');
         moveEl.after(interruptElement);
       }
@@ -726,8 +640,6 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       } else {
         interruptElement.appendChild(comment);
       }
-      
-      console.log('Added AI comment for move:', moveEl.textContent, 'ply:', ply);
     };
 
     plyByMoveEl.forEach((ply, moveEl) => {
@@ -736,15 +648,15 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
 
     // Nach allen Moment-Verarbeitungen: Erstelle Empty-Moves für die Darstellung
     // Das muss nach den Cleanups passieren, damit sie nicht wieder entfernt werden
-    console.log('🔄 Creating empty moves for proper display structure...');
-    console.log('🔄 momentsByPly entries:', Object.keys(momentsByPly).length);
-    console.log('🔄 momentsByPly:', momentsByPly);
-    console.log('🔄 plyByMoveEl size:', plyByMoveEl.size);
+    
+    // CRITICAL: Empty move creation must happen AFTER all AI comment processing
+    // to prevent them from being removed by cleanup functions.
+    // We use the plyByMoveEl Map instead of DOM queries because Lichess uses
+    // encoded 'p' attributes that are not searchable via standard selectors.
     
     // Verwende die bereits erstellte plyByMoveEl Map anstatt DOM-Queries
     for (const [plyStr, moment] of Object.entries(momentsByPly)) {
       const ply = parseInt(plyStr);
-      console.log(`🔄 Looking for ply ${ply} in plyByMoveEl map`);
       
       // Suche das Move-Element in der plyByMoveEl Map
       let moveEl: HTMLElement | null = null;
@@ -755,14 +667,13 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         }
       }
       
-      console.log(`🔄 Found moveEl for ply ${ply}:`, !!moveEl, moveEl?.textContent);
       if (!moveEl) continue;
 
       const isWhiteMove = ply % 2 === 1;
-      console.log(`📝 Processing empty-move creation for ${moment.move} (ply ${ply}, ${isWhiteMove ? 'white' : 'black'})`);
-
+      
       if (isWhiteMove) {
-        // Weißer Zug: Prüfe ob schwarzer Zug auch einen Moment/Interrupt hat
+        // White move: Check if the following black move has a moment/interrupt
+        // If so, create an empty move after the white move for proper display spacing
         const blackMovePly = ply + 1;
         const blackMoveHasMoment = !!momentsByPly[blackMovePly];
         
@@ -773,25 +684,23 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         const blackMoveHasNativeInterrupt = !!(nextBlackMove && nextBlackMove.nextElementSibling?.tagName.toLowerCase() === 'interrupt');
         
         if (blackMoveHasMoment || blackMoveHasNativeInterrupt) {
-          // Prüfe, ob bereits ein Empty-Move nach diesem weißen Zug existiert
+          // Check for existing empty move to prevent duplicates (respects both native Lichess and AI-created)
           const nextElement = moveEl.nextElementSibling;
           const existingEmptyMove = nextElement && nextElement.tagName.toLowerCase() === 'move' && nextElement.classList.contains('empty');
           
           if (!existingEmptyMove) {
-            console.log(`🔵 Creating empty move after white move ${moment.move}`);
             const emptyMove = document.createElement('move');
             emptyMove.className = 'empty';
             emptyMove.textContent = '...';
             const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
             emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
             moveEl.after(emptyMove);
-            console.log(`🔵 Empty move created after ${moveEl.textContent}`);
           } else {
-            console.log(`🔵 Empty move already exists after white move ${moment.move}, skipping`);
           }
         }
       } else {
-        // Schwarzer Zug: Prüfe ob weißer Zug auch einen Moment/Interrupt hat
+        // Black move: Check if the preceding white move has a moment/interrupt  
+        // If so, create an empty move before the black move for proper display spacing
         const whiteMovePly = ply - 1;
         const whiteMoveHasMoment = !!momentsByPly[whiteMovePly];
         
@@ -800,14 +709,12 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         
         if ((whiteMoveHasMoment || whiteMoveHasNativeInterrupt) && 
             (!prevElement || !(prevElement.tagName.toLowerCase() === 'move' && prevElement.classList.contains('empty')))) {
-          console.log(`🔵 Creating empty move before black move ${moment.move}`);
           const emptyMove = document.createElement('move');
           emptyMove.className = 'empty';
           emptyMove.textContent = '...';
           const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
           moveEl.before(emptyMove);
-          console.log(`🔵 Empty move created before ${moveEl.textContent}`);
         }
       }
     }
@@ -872,4 +779,89 @@ export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): v
       </div>
     ` : ''}
   `;
+}
+
+/**
+ * Displays the analysis result in the content panel
+ */
+export function displayAnalysisResult(result: any, container: HTMLElement): void {
+  // Normalize data from different formats
+  const normalizedData = normalizeAnalysisData(result);
+  
+  // Bestimme, ob es eine richtige Analyse ist oder nur ein leerer/Fehler-Zustand
+  const hasAnalysis = normalizedData.summary && normalizedData.summary.trim().length > 0;
+  
+  // Leere den Container und setze die Grundstile
+  container.innerHTML = '';
+  container.style.padding = '0';
+  container.style.margin = '0';
+  
+  const content = document.createElement('div');
+  content.className = 'chess-gpt-analysis-content';
+  content.style.padding = '0';
+  content.style.margin = '0';
+  
+  if (hasAnalysis) {
+    // Analyse-Inhalt erstellen
+    const analysisContent = document.createElement('div');
+    analysisContent.className = 'analysis-content';
+    analysisContent.style.margin = '0';
+    analysisContent.style.padding = '10px';
+    
+    // Scrollbaren Container für die Zusammenfassung erstellen
+    const summaryContainer = document.createElement('div');
+    summaryContainer.className = 'summary-container';
+    summaryContainer.style.maxHeight = '350px';
+    summaryContainer.style.overflowY = 'auto';
+    summaryContainer.style.fontSize = '95%';
+    summaryContainer.style.whiteSpace = 'pre-line';
+    summaryContainer.style.padding = '10px';
+    summaryContainer.style.margin = '0';
+    summaryContainer.style.overflowWrap = 'break-word';
+    
+    // Statt einfachem Text nun formatierte Links für Zugnotationen verwenden
+    const formattedContent = convertMovesToLinks(normalizedData.summary);
+    summaryContainer.appendChild(formattedContent);
+    
+    analysisContent.appendChild(summaryContainer);
+    
+    
+    content.appendChild(analysisContent);
+  } else {
+    // Leerer Zustand
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-analysis';
+    emptyState.style.color = '#666';
+    emptyState.style.textAlign = 'center';
+    emptyState.style.padding = '20px 0';
+    
+    const noAnalysisText = document.createElement('p');
+    noAnalysisText.textContent = 'Keine Analyse verfügbar.';
+    emptyState.appendChild(noAnalysisText);
+    
+    const hintText = document.createElement('p');
+    hintText.style.fontSize = '0.9em';
+    hintText.style.marginTop = '8px';
+    hintText.textContent = 'Wechsle zu einem anderen Tab und zurück, um eine Analyse zu starten.';
+    emptyState.appendChild(hintText);
+    
+    content.appendChild(emptyState);
+  }
+  
+  // Container mit Content füllen
+  container.appendChild(content);
+  
+  // Implement highlights in the move list if moments are available
+  if (normalizedData.moments && normalizedData.moments.length > 0) {
+    console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
+    // Find the move list
+    const moveListContainer = document.querySelector('.tview2');
+    if (moveListContainer) {
+      highlightMovesInMoveList(moveListContainer as HTMLElement, normalizedData.moments);
+    } else {
+      console.error('Move list container not found');
+    }
+  } else {
+    console.log('No moments to highlight');
+  }
 }
