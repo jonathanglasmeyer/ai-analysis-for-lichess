@@ -105,7 +105,16 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
 const styles = {
   container: `margin: 0; padding: 10px;`,
   emptyState: `color: #666; text-align: center; padding: 20px 0;`,
-  infoText: `margin-top: 15px; font-size: 0.9em; color: #666;`
+  infoText: `margin-top: 15px; font-size: 0.9em; color: #666;`,
+  summaryContainer: `
+    max-height: 350px; 
+    overflow-y: auto; 
+    font-size: 95%; 
+    white-space: pre-line; 
+    padding-right: 8px;
+    margin: 0;
+    overflow-wrap: break-word;
+  `
 };
 
 /**
@@ -118,28 +127,62 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   // Bestimme, ob es eine richtige Analyse ist oder nur ein leerer/Fehler-Zustand
   const hasAnalysis = normalizedData.summary && normalizedData.summary.trim().length > 0;
   
-  // Display analysis summary or empty state
-  container.innerHTML = `
-    <div class="chess-gpt-analysis-content" style="${styles.container}">
-      ${hasAnalysis 
-        ? `
-          <div class="analysis-content">
-            <p style="white-space: pre-line;">${normalizedData.summary}</p>
-            
-            ${normalizedData.moments && normalizedData.moments.length > 0 
-              ? `<div class="ai-moments-info" style="${styles.infoText}">
-                  <p>Wichtige Momente werden in der Zugliste hervorgehoben.</p>
-                </div>` 
-              : ''}
-          </div>
-        ` 
-        : `<div class="empty-analysis" style="${styles.emptyState}">
-            <p>Keine Analyse verfügbar.</p>
-            <p style="font-size: 0.9em; margin-top: 8px;">Wechsle zu einem anderen Tab und zurück, um eine Analyse zu starten.</p>
-          </div>`
-      }
-    </div>
-  `;
+  // Leere den Container und setze die Grundstile
+  container.innerHTML = '';
+  container.style.padding = '0';
+  container.style.margin = '0';
+  
+  const content = document.createElement('div');
+  content.className = 'chess-gpt-analysis-content';
+  content.style.padding = '0';
+  content.style.margin = '0';
+  
+  if (hasAnalysis) {
+    // Analyse-Inhalt erstellen
+    const analysisContent = document.createElement('div');
+    analysisContent.className = 'analysis-content';
+    analysisContent.style.margin = '0';
+    analysisContent.style.padding = '10px';
+    
+    // Scrollbaren Container für die Zusammenfassung erstellen
+    const summaryContainer = document.createElement('div');
+    summaryContainer.className = 'summary-container';
+    summaryContainer.style.maxHeight = '350px';
+    summaryContainer.style.overflowY = 'auto';
+    summaryContainer.style.fontSize = '95%';
+    summaryContainer.style.whiteSpace = 'pre-line';
+    summaryContainer.style.padding = '10px';
+    summaryContainer.style.margin = '0';
+    summaryContainer.style.overflowWrap = 'break-word';
+    summaryContainer.textContent = normalizedData.summary;
+    
+    analysisContent.appendChild(summaryContainer);
+    
+    
+    content.appendChild(analysisContent);
+  } else {
+    // Leerer Zustand
+    const emptyState = document.createElement('div');
+    emptyState.className = 'empty-analysis';
+    emptyState.style.color = '#666';
+    emptyState.style.textAlign = 'center';
+    emptyState.style.padding = '20px 0';
+    
+    const noAnalysisText = document.createElement('p');
+    noAnalysisText.textContent = 'Keine Analyse verfügbar.';
+    emptyState.appendChild(noAnalysisText);
+    
+    const hintText = document.createElement('p');
+    hintText.style.fontSize = '0.9em';
+    hintText.style.marginTop = '8px';
+    hintText.textContent = 'Wechsle zu einem anderen Tab und zurück, um eine Analyse zu starten.';
+    emptyState.appendChild(hintText);
+    
+    content.appendChild(emptyState);
+  }
+  
+  // Container mit Content füllen
+  container.appendChild(content);
   
   // Implement highlights in the move list if moments are available
   if (normalizedData.moments && normalizedData.moments.length > 0) {
