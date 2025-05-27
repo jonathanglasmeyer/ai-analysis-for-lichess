@@ -211,13 +211,13 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         return false;
       }
       
-      const notationClean = notation.trim();
+      const moveText = `${moveNumber}${isWhite ? '.' : '...'} ${notation}`;
       let targetMove: Element | null = null;
       
       // METHODE 1: Suche nach dem SAN-Element innerhalb der move-Elemente
       const sanElements = moveContainer.querySelectorAll('move san');
       for (const san of Array.from(sanElements)) {
-        if (san.textContent && san.textContent.trim() === notationClean) {
+        if (san.textContent && san.textContent.trim() === notation) {
           // Finde das übergeordnete move-Element
           const moveParent = san.closest('move');
           if (moveParent) {
@@ -241,7 +241,7 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         for (const move of Array.from(moves)) {
           // Prüfe zuerst auf san-Element im move
           const sanElem = move.querySelector('san');
-          if (sanElem && sanElem.textContent && sanElem.textContent.trim() === notationClean) {
+          if (sanElem && sanElem.textContent && sanElem.textContent.trim() === notation) {
             // Für schwarze Züge: Prüfe vorheriges Element auf index mit richtiger Nummer
             if (!isWhite) {
               let prev = move.previousElementSibling;
@@ -264,7 +264,7 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
             }
           } 
           // Prüfe direkt auf move-Text
-          else if (move.textContent && move.textContent.includes(notationClean)) {
+          else if (move.textContent && move.textContent.includes(moveText)) {
             // Ist es ein weißer Zug direkt nach einer Indexnummer?
             if (isWhite && move.previousElementSibling && 
                 move.previousElementSibling.tagName.toLowerCase() === 'index' && 
@@ -294,21 +294,21 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         const indexElems = moveContainer.querySelectorAll('index');
         for (const indexElem of Array.from(indexElems)) {
           if (indexElem.textContent && indexElem.textContent.includes(moveNumber)) {
-            let moveElem;
+            let targetMove: Element | null = null;
             // Für weißen Zug nehmen wir das direkt folgende Element
             if (isWhite) {
-              moveElem = indexElem.nextElementSibling;
+              targetMove = indexElem.nextElementSibling;
             } 
             // Für schwarzen Zug nehmen wir das übernächste Element
             else {
-              moveElem = indexElem.nextElementSibling?.nextElementSibling;
+              targetMove = indexElem.nextElementSibling?.nextElementSibling || null;
             }
             
-            if (moveElem && moveElem.tagName.toLowerCase() === 'move') {
+            if (targetMove && targetMove.tagName.toLowerCase() === 'move') {
               // Noch einmal den Text prüfen, wenn möglich
-              const moveText = moveElem.textContent || '';
-              if (moveText.includes(notationClean) || !notation) {
-                targetMove = moveElem;
+              const moveText = targetMove.textContent || '';
+              if (moveText.includes(notation) || !notation) {
+                targetMove = targetMove;
                 break;
               }
             }
@@ -433,92 +433,384 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   // Implement highlights in the move list if moments are available
   if (normalizedData.moments && normalizedData.moments.length > 0) {
     console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
-    highlightMovesInMoveList(normalizedData.moments);
+    // Find the move list
+    const moveListContainer = document.querySelector('.tview2');
+    if (moveListContainer) {
+      highlightMovesInMoveList(moveListContainer as HTMLElement, normalizedData.moments);
+    } else {
+      console.error('Move list container not found');
+    }
   } else {
     console.log('No moments to highlight');
   }
 }
 
 /**
- * Highlights moves in the Lichess move list
+ * Highlights moves in the move list based on the analysis moments
  */
-export function highlightMovesInMoveList(moments: AnalysisMoment[]): void {
-  console.log('Highlighting moves:', moments);
-  
-  // Find the move list
-  const moveListContainer = document.querySelector('.tview2');
-  if (!moveListContainer) {
-    console.error('Move list container not found');
+export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments: AnalysisMoment[]): void {
+  if (!moveListContainer || !moments || moments.length === 0) {
+    console.log('No move list container or moments found');
     return;
   }
+  console.log('Moments:', moments);
+  
+  // Cleanup: Entferne alle von uns erstellten Empty-Moves und AI-Kommentare aus vorherigen Durchläufen
+  const existingAIComments = document.querySelectorAll('.ai-comment');
+  existingAIComments.forEach(comment => {
+    const interrupt = comment.closest('interrupt');
+    // Wenn das interrupt nur unseren AI-Kommentar enthält, entferne das ganze interrupt
+    if (interrupt && interrupt.children.length === 1 && interrupt.children[0].classList.contains('ai-comment')) {
+      // Prüfe, ob es ein von uns erstelltes Empty-Move vor oder nach dem interrupt gibt
+      const prevEmpty = interrupt.previousElementSibling;
+      const nextEmpty = interrupt.nextElementSibling;
+      
+      if (prevEmpty && prevEmpty.tagName.toLowerCase() === 'move' && prevEmpty.classList.contains('empty') && prevEmpty.hasAttribute('data-ai-empty-id')) {
+        console.log(`🗑️ Removing AI-created empty move (ID: ${prevEmpty.getAttribute('data-ai-empty-id')}) before interrupt`);
+        prevEmpty.remove();
+      }
+      if (nextEmpty && nextEmpty.tagName.toLowerCase() === 'move' && nextEmpty.classList.contains('empty') && nextEmpty.hasAttribute('data-ai-empty-id')) {
+        console.log(`🗑️ Removing AI-created empty move (ID: ${nextEmpty.getAttribute('data-ai-empty-id')}) after interrupt`);
+        nextEmpty.remove();
+      }
+      
+      console.log('🗑️ Removing AI-only interrupt');
+      interrupt.remove();
+    } else if (interrupt) {
+      // Nur den AI-Kommentar entfernen, interrupt behalten
+      console.log('🗑️ Removing AI comment from shared interrupt');
+      comment.remove();
+    }
+  });
   
   // Inject CSS for AI comments
   injectAICommentStyles();
   
   // Collect all moves in a ply-based mapping
   const momentsByPly: Record<number, AnalysisMoment> = {};
-  moments.forEach(moment => {
+  moments.forEach((moment: AnalysisMoment) => {
     momentsByPly[moment.ply] = moment;
   });
   
   // Find all move entries in the move list
   setTimeout(() => {
     // Wait briefly as Lichess might update the move list dynamically
-    const moveElements = moveListContainer.querySelectorAll('move');
-    console.log('Found move elements:', moveElements.length);
+    console.log('Looking for move elements and their PLY values');
+    console.log('Moments by ply:', Object.keys(momentsByPly).map(Number));
     
-    // Try to determine the half-move numbers (ply) for each move
-    let currentPly = 0;
-    moveElements.forEach(moveEl => {
-      currentPly++;
+    // Neue Strategie: Folge der DOM-Struktur und ermittle PLY-Werte basierend auf den index-Elementen
+    const moveElements = Array.from(moveListContainer.querySelectorAll('move')).filter(moveEl => {
+      // Überspringe Züge die innerhalb von Varianten stehen
+      if (moveEl.closest('lines') || moveEl.closest('line') || moveEl.closest('branch')) {
+        return false;
+      }
       
-      // Check if this move is an important moment
-      if (momentsByPly[currentPly]) {
-        // Only add the comment, no visual highlighting of the move
-        const moment = momentsByPly[currentPly];
+      // Überspringe leere Züge und "[...]" Platzhalter
+      if (moveEl.classList.contains('empty')) {
+        return false;
+      }
+      
+      const moveText = moveEl.querySelector('san')?.textContent || moveEl.textContent || '';
+      if (moveText.includes('[...]') || moveText.trim() === '...') {
+        return false;
+      }
+      
+      return true;
+    });
+
+    console.log(`Found ${moveElements.length} main moves (excluding variants)`);
+
+    // Sammele alle Züge und ihre zugehörigen Vollzüge
+    const indexElements = moveListContainer.querySelectorAll('index');
+    
+    // Map erstellen, um jeden Zug mit seinem Ply-Wert zu verfolgen
+    const plyByMoveEl = new Map<Element, number>();
+    
+    // Zuerst alle Index-Elemente verarbeiten, um die Vollzug-Nummern zu bekommen
+    let currentFullMoveNumber = 0;
+    let lastIndexContent = '';
+    indexElements.forEach((indexEl: Element) => {
+      const indexText = indexEl.textContent || '';
+      // Index-Inhalte können sein: "1", "1...", "1.", etc.
+      const numberMatch = indexText.match(/(\d+)/);
+      if (numberMatch) {
+        currentFullMoveNumber = parseInt(numberMatch[1], 10);
+        lastIndexContent = indexText;
+        console.log(`Found index: ${indexText}, set current move to ${currentFullMoveNumber}`);
+      }
+    });
+    
+    // Züge durchgehen und Ply-Werte berechnen
+    // Robuster Ansatz: Verfolge direkt die Vollzüge aus den Index-Elementen
+    
+    // Map zum Tracken der Indizes und zugehörigen Vollzüge
+    const movesByFullMoveNumber = new Map<number, { white?: Element; black?: Element }>();
+    let lastIndexNumber = 0;
+    let currentMoveColor: 'white' | 'black' = 'white'; // Spur halten, welche Farbe als nächstes dran ist
+    
+    moveElements.forEach((moveEl) => {
+      const moveText = moveEl.querySelector('san')?.textContent || moveEl.textContent || '';
+      const prevEl = moveEl.previousElementSibling;
+      
+      // Prüfe, ob direkt vor diesem Zug ein Index steht
+      let indexEl = prevEl;
+      let stepsBack = 0;
+      let foundIndex = false;
+      
+      // Gehe bis zu 5 Schritte zurück, um einen Index zu finden
+      // (um <move class="empty">, <interrupt> etc. zu überspringen)
+      while (indexEl && stepsBack < 5) {
+        if (indexEl.tagName.toLowerCase() === 'index') {
+          const indexText = indexEl.textContent || '';
+          const match = indexText.match(/(\d+)/);
+          if (match) {
+            const newIndexNumber = parseInt(match[1], 10);
+            
+            // Nur wenn sich die Zugnummer ändert, setzen wir einen neuen Vollzug
+            if (newIndexNumber !== lastIndexNumber) {
+              lastIndexNumber = newIndexNumber;
+              currentMoveColor = 'white'; // Nach einem neuen Index kommt immer ein weißer Zug
+              console.log(`Found new index ${newIndexNumber}, resetting to white for ${moveText}`);
+            } else {
+              console.log(`Found same index ${newIndexNumber}, keeping currentMoveColor=${currentMoveColor} for ${moveText}`);
+            }
+            foundIndex = true;
+            break;
+          }
+        }
+        indexEl = indexEl.previousElementSibling;
+        stepsBack++;
+      }
+      
+      if (!foundIndex) {
+        console.log(`No index found for ${moveText}, currentMoveColor=${currentMoveColor}, lastIndexNumber=${lastIndexNumber}`);
+      }
+      
+      // Stelle sicher, dass wir einen Eintrag für diesen Vollzug haben
+      if (!movesByFullMoveNumber.has(lastIndexNumber)) {
+        movesByFullMoveNumber.set(lastIndexNumber, {});
+      }
+      
+      const moveData = movesByFullMoveNumber.get(lastIndexNumber)!;
+      
+      if (currentMoveColor === 'white' && !moveData.white) {
+        // Das ist der weiße Zug für diesen Vollzug
+        moveData.white = moveEl;
+        currentMoveColor = 'black'; // Nächster Zug wird schwarz sein
+        console.log(`Weißer Zug: ${moveText} für Vollzug ${lastIndexNumber}`);
+      } else if (currentMoveColor === 'black' && !moveData.black) {
+        // Das ist der schwarze Zug für diesen Vollzug
+        moveData.black = moveEl;
+        currentMoveColor = 'white'; // Nach schwarz kommt der nächste Vollzug (weiß)
+        console.log(`Schwarzer Zug: ${moveText} für Vollzug ${lastIndexNumber}`);
+      } else {
+        console.log(`Unerwarteter Zug: ${moveText} (currentMoveColor: ${currentMoveColor}, lastIndexNumber: ${lastIndexNumber})`);
+      }
+    });
+    
+    // Jetzt die AI-Kommentare einfügen, basierend auf den berechneten PLY-Werten
+    for (const [fullMoveNumber, moves] of movesByFullMoveNumber.entries()) {
+      if (moves.white) {
+        const ply = 2 * fullMoveNumber - 1; // Weiße Züge: 1, 3, 5, 7, 9, 11, 13...
+        plyByMoveEl.set(moves.white, ply);
         
-        // Check if a comment already exists after this move
-        let commentElement = moveEl.nextElementSibling;
-        let commentAlreadyExists = false;
+        const moveText = moves.white.querySelector('san')?.textContent || moves.white.textContent || '';
+        console.log(`White move: ${moveText}, fullMove: ${fullMoveNumber}, ply: ${ply}, has moment: ${!!momentsByPly[ply]}`);
+      }
+      
+      if (moves.black) {
+        const ply = 2 * fullMoveNumber; // Schwarze Züge: 2, 4, 6, 8, 10, 12, 14...
+        plyByMoveEl.set(moves.black, ply);
         
-        if (commentElement && commentElement.tagName.toLowerCase() === 'interrupt') {
-          // Check if an AI comment already exists
-          const existingAIComment = commentElement.querySelector('.ai-comment');
-          if (existingAIComment) {
-            commentAlreadyExists = true;
-          } else {
-            // Add to existing comments
-            const commentContainer = commentElement.querySelector('comment') || 
-                                     commentElement.querySelector('.comment');
-            if (commentContainer) {
-              insertAIComment(commentContainer as HTMLElement, moment);
-              commentAlreadyExists = true;
+        const moveText = moves.black.querySelector('san')?.textContent || moves.black.textContent || '';
+        console.log(`Black move: ${moveText}, fullMove: ${fullMoveNumber}, ply: ${ply}, has moment: ${!!momentsByPly[ply]}`);
+      }
+    }
+    
+    const processMove = (moveEl: Element, ply: number) => {
+      // Toleranz für ungenaue Ply-Werte einbauen
+      // Auch bei leichten Abweichungen (±1) sollen die Kommentare angezeigt werden
+      let moment = momentsByPly[ply];
+      
+      // Wenn kein Moment für den exakten Ply gefunden wurde, versuche benachbarte Plys
+      if (!moment) {
+        // Erst prüfen, ob ein Zug mit dem gleichen Text in einem benachbarten Ply existiert
+        const moveText = moveEl.querySelector('san')?.textContent || moveEl.textContent || '';
+        const trimmedMoveText = moveText.replace(/[\s\?\.\!]+/g, ''); // Entferne Leerzeichen, ?, ., ! etc.
+        
+        // Benachbarte Plys prüfen (-1, +1)
+        for (const offset of [-1, 1]) {
+          const nearbyPly = ply + offset;
+          const nearbyMoment = momentsByPly[nearbyPly];
+          
+          if (nearbyMoment && nearbyMoment.move) {
+            const trimmedMomentMove = nearbyMoment.move.replace(/[\s\?\.\!]+/g, '');
+            
+            // Wenn der Zugtext übereinstimmt oder zumindest sehr ähnlich ist
+            if (trimmedMoveText.includes(trimmedMomentMove) || trimmedMomentMove.includes(trimmedMoveText)) {
+              console.log(`Fuzzy match: Move '${trimmedMoveText}' matched with moment '${trimmedMomentMove}' at ply ${nearbyPly} instead of ${ply}`);
+              moment = nearbyMoment;
+              break;
             }
           }
         }
+      }
+      
+      // Immer noch kein Moment gefunden?
+      if (!moment) {
+        console.log(`No moment found for move ${moveEl.textContent} (ply ${ply})`);
+        return; // Kein wichtiger Moment für diesen Zug
+      }
+      
+      console.log(`Processing move ${moveEl.textContent} with ply ${ply}, found moment: ply ${moment.ply}, move: ${moment.move}`);
+      
+      // Prüfe, ob dieser Moment bereits gerendert wurde (Anti-Duplikat-Schutz)
+      const momentId = `ply-${moment.ply}-${moment.move}`;
+      if (document.querySelector(`[data-moment-id="${momentId}"]`)) {
+        console.log(`Moment already rendered for ply ${moment.ply}, move ${moment.move}. Skipping.`);
+        return;
+      }
+      
+      // Prüfe, ob es sich um einen Variantenzug handelt
+      if (moveEl.closest('lines') || moveEl.closest('line') || moveEl.closest('branch')) {
+        console.log(`Skipping variant move: ${moveEl.textContent}`);
+        return;
+      }
+
+      // Check for existing interrupt
+      let interruptElement: HTMLElement | null = null;
+      let nextElement = moveEl.nextElementSibling;
+      
+      // Das interrupt Element sollte immer direkt nach dem Move kommen
+      // Wenn ein <move class="empty"> dazwischen ist, schaue dahinter
+      if (nextElement && nextElement.classList.contains('empty')) {
+        nextElement = nextElement.nextElementSibling as HTMLElement;
+      }
+      
+      // Check if there's already an interrupt with Lichess comments
+      if (nextElement && nextElement.tagName.toLowerCase() === 'interrupt') {
+        interruptElement = nextElement as HTMLElement;
         
-        // If no comment exists, add a new one
-        if (!commentAlreadyExists) {
-          // Create a new comment in Lichess style
-          const interrupt = document.createElement('interrupt');
-          const comment = document.createElement('comment');
-          comment.className = 'ai-comment';
+        // Check if there's already an AI comment
+        const existingAIComment = interruptElement.querySelector('.ai-comment');
+        if (existingAIComment) {
+          console.log('AI comment already exists for move:', moveEl.textContent);
+          return;
+        }
+      }
+      
+      // If no existing interrupt found, create one
+      if (!interruptElement) {
+        console.log(`Creating new interrupt for ${moveEl.textContent} (ply ${ply})`);
+        interruptElement = document.createElement('interrupt');
+        moveEl.after(interruptElement);
+      }
+      
+      // Create and add the AI comment
+      const comment = document.createElement('comment');
+      comment.className = 'ai-comment';
+      comment.setAttribute('data-moment-id', momentId);
+      insertAIComment(comment, moment);
+      
+      // Add the comment to the interrupt AFTER any existing Lichess comments
+      // but BEFORE any lines elements
+      const existingComment = interruptElement.querySelector('comment:not(.ai-comment)');
+      const existingLines = interruptElement.querySelector('lines');
+      
+      if (existingComment && existingLines) {
+        interruptElement.insertBefore(comment, existingLines);
+      } else if (existingComment) {
+        existingComment.after(comment);
+      } else if (existingLines) {
+        interruptElement.insertBefore(comment, existingLines);
+      } else {
+        interruptElement.appendChild(comment);
+      }
+      
+      console.log('Added AI comment for move:', moveEl.textContent, 'ply:', ply);
+    };
+
+    plyByMoveEl.forEach((ply, moveEl) => {
+      processMove(moveEl, ply);
+    });
+
+    // Nach allen Moment-Verarbeitungen: Erstelle Empty-Moves für die Darstellung
+    // Das muss nach den Cleanups passieren, damit sie nicht wieder entfernt werden
+    console.log('🔄 Creating empty moves for proper display structure...');
+    console.log('🔄 momentsByPly entries:', Object.keys(momentsByPly).length);
+    console.log('🔄 momentsByPly:', momentsByPly);
+    console.log('🔄 plyByMoveEl size:', plyByMoveEl.size);
+    
+    // Verwende die bereits erstellte plyByMoveEl Map anstatt DOM-Queries
+    for (const [plyStr, moment] of Object.entries(momentsByPly)) {
+      const ply = parseInt(plyStr);
+      console.log(`🔄 Looking for ply ${ply} in plyByMoveEl map`);
+      
+      // Suche das Move-Element in der plyByMoveEl Map
+      let moveEl: HTMLElement | null = null;
+      for (const [element, elementPly] of plyByMoveEl.entries()) {
+        if (elementPly === ply) {
+          moveEl = element as HTMLElement;
+          break;
+        }
+      }
+      
+      console.log(`🔄 Found moveEl for ply ${ply}:`, !!moveEl, moveEl?.textContent);
+      if (!moveEl) continue;
+
+      const isWhiteMove = ply % 2 === 1;
+      console.log(`📝 Processing empty-move creation for ${moment.move} (ply ${ply}, ${isWhiteMove ? 'white' : 'black'})`);
+
+      if (isWhiteMove) {
+        // Weißer Zug: Prüfe ob schwarzer Zug auch einen Moment/Interrupt hat
+        const blackMovePly = ply + 1;
+        const blackMoveHasMoment = !!momentsByPly[blackMovePly];
+        
+        let nextBlackMove = moveEl.nextElementSibling;
+        while (nextBlackMove && nextBlackMove.tagName.toLowerCase() !== 'move') {
+          nextBlackMove = nextBlackMove.nextElementSibling;
+        }
+        const blackMoveHasNativeInterrupt = !!(nextBlackMove && nextBlackMove.nextElementSibling?.tagName.toLowerCase() === 'interrupt');
+        
+        if (blackMoveHasMoment || blackMoveHasNativeInterrupt) {
+          // Prüfe, ob bereits ein Empty-Move nach diesem weißen Zug existiert
+          const nextElement = moveEl.nextElementSibling;
+          const existingEmptyMove = nextElement && nextElement.tagName.toLowerCase() === 'move' && nextElement.classList.contains('empty');
           
-          insertAIComment(comment, moment);
-          
-          interrupt.appendChild(comment);
-          
-          // Insert the comment after the move
-          if (moveEl.nextSibling) {
-            moveEl.parentNode?.insertBefore(interrupt, moveEl.nextSibling);
+          if (!existingEmptyMove) {
+            console.log(`🔵 Creating empty move after white move ${moment.move}`);
+            const emptyMove = document.createElement('move');
+            emptyMove.className = 'empty';
+            emptyMove.textContent = '...';
+            const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
+            moveEl.after(emptyMove);
+            console.log(`🔵 Empty move created after ${moveEl.textContent}`);
           } else {
-            moveEl.parentNode?.appendChild(interrupt);
+            console.log(`🔵 Empty move already exists after white move ${moment.move}, skipping`);
           }
         }
+      } else {
+        // Schwarzer Zug: Prüfe ob weißer Zug auch einen Moment/Interrupt hat
+        const whiteMovePly = ply - 1;
+        const whiteMoveHasMoment = !!momentsByPly[whiteMovePly];
         
-        console.log('Highlighted move:', moveEl.textContent, 'ply:', currentPly);
+        const prevElement = moveEl.previousElementSibling;
+        const whiteMoveHasNativeInterrupt = prevElement && prevElement.nextElementSibling?.tagName.toLowerCase() === 'interrupt';
+        
+        if ((whiteMoveHasMoment || whiteMoveHasNativeInterrupt) && 
+            (!prevElement || !(prevElement.tagName.toLowerCase() === 'move' && prevElement.classList.contains('empty')))) {
+          console.log(`🔵 Creating empty move before black move ${moment.move}`);
+          const emptyMove = document.createElement('move');
+          emptyMove.className = 'empty';
+          emptyMove.textContent = '...';
+          const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
+          moveEl.before(emptyMove);
+          console.log(`🔵 Empty move created before ${moveEl.textContent}`);
+        }
       }
-    });
+    }
   }, 500);
 }
 

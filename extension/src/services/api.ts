@@ -31,6 +31,8 @@ export interface AnalysisResponse {
 
 export interface AnalysisMoment {
   ply: number;
+  move: string;
+  color: string; // 'white' oder 'black'
   comment: string;
   recommendation?: string;
   reasoning?: string;
