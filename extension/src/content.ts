@@ -3,6 +3,26 @@
  */
 
 import { waitForElement, analyzeDOM } from './utils/dom';
+import { setupI18n, observeLanguageChange } from './i18n';
+import i18next from 'i18next';
+
+// Initialize i18n before any translations are used
+setupI18n();
+observeLanguageChange();
+
+// Dynamically update UI text when language changes
+i18next.on('languageChanged', () => {
+  // Update AI Analysis tab title
+  const aiTab = document.querySelector('.mchat__tab.ai-analysis span');
+  if (aiTab) {
+    aiTab.textContent = i18next.t('analysis.title');
+  }
+  // Update Analyze button text
+  const analyzeButton = document.querySelector('.ai-analysis-panel button');
+  if (analyzeButton) {
+    analyzeButton.textContent = i18next.t('analysis.create');
+  }
+});
 import { extractPgn } from './utils/pgn';
 import { requestCacheCheck, requestAnalysis, CacheCheckResponse } from './services/api';
 import { setupTabEventListeners, activateAiTab, activatePanel } from './components/tabs';
@@ -26,7 +46,7 @@ async function startAnalysis(contentElement: HTMLElement): Promise<void> {
   
   if (pgn) {
     // Show loading status
-    contentElement.innerHTML = '<div style="padding: 20px; color: #666;">Analysiere Partie...</div>';
+    contentElement.innerHTML = `<div style="padding: 20px; color: #666;">${i18next.t('status.analyzing')}</div>`;
     
     // Send message to background script
     const response = await requestAnalysis(pgn);
@@ -37,11 +57,11 @@ async function startAnalysis(contentElement: HTMLElement): Promise<void> {
     } else {
       // Show error
       contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">
-        Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
+        ${i18next.t('error.analysisFailed')} ${response?.error || i18next.t('error.unknownAnalysisError')}
       </div>`;
     }
   } else {
-    contentElement.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
+    contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.pgnExtract')}</div>`;
   }
 }
 
@@ -81,7 +101,7 @@ async function addAiAnalysisTab(): Promise<void> {
     
     // Add span with text like the other tabs
     const tabSpan = document.createElement('span');
-    tabSpan.textContent = 'AI Analyse';
+    tabSpan.textContent = i18next.t('analysis.title');
     tabSpan.style.color = '#805AD5'; // Purple color, same as in move highlights
     aiTab.appendChild(tabSpan);
     
@@ -129,7 +149,7 @@ async function addAiAnalysisTab(): Promise<void> {
         if (!pgn) {
           console.error('No PGN found for cache check');
           isCacheCheckInProgress = false;
-          return { error: 'Konnte keine PGN finden' };
+          return { error: i18next.t('error.noPGN') };
         }
         
         console.log('Checking cache for:', pgn.substring(0, 50) + '...');
@@ -143,9 +163,9 @@ async function addAiAnalysisTab(): Promise<void> {
         isCacheCheckInProgress = false;
         let errMsg = String(error);
         if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
-          errMsg = 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.';
+          errMsg = i18next.t('error.serverUnreachable');
         } else {
-          errMsg = `Fehler bei der Cache-Prüfung: ${errMsg}`;
+          errMsg = i18next.t('error.cacheCheck') + ' ' + errMsg;
         }
         return { error: errMsg };
       }
@@ -183,8 +203,8 @@ async function addAiAnalysisTab(): Promise<void> {
       aiContent.innerHTML = `
         <div style="padding: 20px; text-align: center;">
           <div style="margin-bottom: 15px; color: #666;">
-            <p>Prüfe Cache...</p>
-            <p style="font-size: 0.9em; margin-top: 8px;">Suche nach bestehenden Analysen für diese Partie.</p>
+            <p>${i18next.t('status.checkingCache')}</p>
+            <p style="font-size: 0.9em; margin-top: 8px;">${i18next.t('status.searchingExisting')}</p>
           </div>
           <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border: 3px solid rgba(128, 90, 213, 0.3); border-radius: 50%; border-top-color: #805AD5; animation: spin 1s ease-in-out infinite;"></div>
         </div>
@@ -205,8 +225,8 @@ async function addAiAnalysisTab(): Promise<void> {
         aiContent.innerHTML = `
           <div style="padding: 20px; text-align: center;">
             <div style="margin-bottom: 15px; color: #666;">
-              <p>Erstelle neue Analyse...</p>
-              <p style="font-size: 0.9em; margin-top: 8px;">Die KI analysiert deine Partie. Dies kann einen Moment dauern.</p>
+              <p>${i18next.t('status.creating')}</p>
+              <p style="font-size: 0.9em; margin-top: 8px;">${i18next.t('status.working')}</p>
             </div>
             <div class="spinner" style="display: inline-block; width: 40px; height: 40px; border: 3px solid rgba(128, 90, 213, 0.3); border-radius: 50%; border-top-color: #805AD5; animation: spin 1s ease-in-out infinite;"></div>
           </div>
@@ -223,11 +243,11 @@ async function addAiAnalysisTab(): Promise<void> {
           } else {
             // Show error
             aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">
-              Fehler bei der Analyse: ${response?.error || 'Unbekannter Fehler'}
+              ${i18next.t('Fehler bei der Analyse:')} ${response?.error || i18next.t('Unerwarteter Fehler bei der Analyse')}
             </div>`;
           }
         } else {
-          aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">PGN konnte nicht extrahiert werden</div>';
+          aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.pgnExtract')}</div>`;
         }
       } else if (cacheResult && cacheResult.ok && cacheResult.inCache) {
         // Cache-Ergebnis anzeigen
@@ -237,12 +257,12 @@ async function addAiAnalysisTab(): Promise<void> {
         // Fehler anzeigen
         let errMsg = cacheResult.error || '';
         if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
-          errMsg = 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.';
+          errMsg = i18next.t('Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.');
         }
         aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${errMsg}</div>`;
       } else {
         // Fallback für unerwartete Situationen
-        aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">Unerwarteter Fehler bei der Analyse</div>';
+        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.unexpected')}</div>`;
       }
     });
     

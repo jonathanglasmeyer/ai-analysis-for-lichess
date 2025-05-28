@@ -8,3 +8,4 @@ description: General recommendations & caveats
 - Regarding the extension/ folder, you don't need to compile changes with npm run build. We're doing that anyways already with `npm run dev`.
 
 - Regarding product & UX choices: DON'T take deviating UX decisions without verifying without me that's acceptable.
+- Technische Implementationen die du als geeignet empfindest, bitte immer direkt umsetzen, nicht immer noch mal ne Abfrage ob du es wirklich tun sollst.

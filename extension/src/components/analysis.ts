@@ -3,6 +3,7 @@
  */
 
 import { AnalysisMoment } from '../services/api';
+import i18next from '../i18n';
 
 interface NormalizedAnalysisData {
   summary: string;
@@ -15,7 +16,7 @@ interface NormalizedAnalysisData {
 export function createAnalyzeButton(): HTMLButtonElement {
   const analyzeButton = document.createElement('button');
   analyzeButton.className = 'button';
-  analyzeButton.textContent = 'AI ANALYSE ERSTELLEN';
+  analyzeButton.textContent = i18next.t('analysis.create');
   analyzeButton.style.margin = '10px';
   analyzeButton.style.padding = '8px 12px';
   analyzeButton.style.backgroundColor = '#629924'; // Green like Lichess buttons

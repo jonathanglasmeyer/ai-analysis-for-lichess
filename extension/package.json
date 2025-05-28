@@ -20,5 +20,8 @@
     "rollup": "^4.41.1",
     "rollup-plugin-typescript2": "^0.36.0",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "i18next": "^23.10.0"
   }
 }
