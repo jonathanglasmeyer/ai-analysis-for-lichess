@@ -141,7 +141,13 @@ async function addAiAnalysisTab(): Promise<void> {
       } catch (error) {
         console.error('Error during cache check:', error);
         isCacheCheckInProgress = false;
-        return { error: `Fehler bei der Cache-Prüfung: ${error}` };
+        let errMsg = String(error);
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
+          errMsg = 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.';
+        } else {
+          errMsg = `Fehler bei der Cache-Prüfung: ${errMsg}`;
+        }
+        return { error: errMsg };
       }
     }
     
@@ -229,7 +235,11 @@ async function addAiAnalysisTab(): Promise<void> {
         displayAnalysisResult(cacheResult, aiContent);
       } else if (cacheResult && cacheResult.error) {
         // Fehler anzeigen
-        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${cacheResult.error}</div>`;
+        let errMsg = cacheResult.error || '';
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
+          errMsg = 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.';
+        }
+        aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${errMsg}</div>`;
       } else {
         // Fallback für unerwartete Situationen
         aiContent.innerHTML = '<div style="padding: 20px; color: #c33;">Unerwarteter Fehler bei der Analyse</div>';

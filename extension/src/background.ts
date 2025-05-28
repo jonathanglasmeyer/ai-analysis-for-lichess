@@ -29,10 +29,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((error: any) => {
         console.error('Error checking cache:', error);
-        sendResponse({ 
-          ok: false, 
-          error: 'Fehler bei der Cache-Prüfung: ' + (error?.message || String(error)) 
-        });
+        if (error instanceof Error && error.name === 'AbortError') {
+          sendResponse({
+            ok: false,
+            error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+          });
+        } else {
+          sendResponse({ 
+            ok: false, 
+            error: 'Fehler bei der Cache-Prüfung: ' + (error?.message || String(error)) 
+          });
+        }
       });
     
     return true; // Indicates async response
@@ -64,10 +71,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((error: any) => {
         console.error('Error analyzing PGN:', error);
-        sendResponse({ 
-          success: false, 
-          error: 'Fehler bei der Analyse: ' + (error?.message || String(error)) 
-        });
+        if (error instanceof Error && error.name === 'AbortError') {
+          sendResponse({
+            success: false,
+            error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+          });
+        } else {
+          sendResponse({ 
+            success: false, 
+            error: 'Fehler bei der Analyse: ' + (error?.message || String(error)) 
+          });
+        }
       });
     
     return true; // Indicates async response
@@ -133,17 +147,21 @@ async function fetchCacheStatus(pgn: string) {
       return result;
     } catch (fetchError) {
       console.error('Error during fetch operation:', fetchError);
-      
-      // Wenn CORS oder Netzwerkfehler, verwende Mock-Daten für Tests
-      console.warn('Using mock data as fallback after fetch error');
-      return mockResponse;
+      throw fetchError;
     }
   } catch (outerError) {
     console.error('Critical error in cache check function:', outerError);
-    return { 
-      ok: false,
-      error: `Fehler bei der Cache-Prüfung: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
-    };
+    if (outerError instanceof Error && outerError.name === 'AbortError') {
+      return {
+        ok: false,
+        error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+      };
+    } else {
+      return { 
+        ok: false,
+        error: `Fehler bei der Cache-Prüfung: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
+      };
+    }
   }
 }
 
@@ -218,16 +236,20 @@ async function performAnalysis(pgn: string) {
       return standardizedResponse;
     } catch (fetchError) {
       console.error('Error during analysis fetch operation:', fetchError);
-      
-      // Wenn CORS oder Netzwerkfehler, verwende Mock-Daten für Tests
-      console.warn('Using mock analysis data as fallback after fetch error');
-      return mockResponse;
+      throw fetchError;
     }
   } catch (outerError) {
     console.error('Critical error in analysis function:', outerError);
-    return { 
-      success: false, 
-      error: `Fehler bei der Analyse: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
-    };
+    if (outerError instanceof Error && outerError.name === 'AbortError') {
+      return {
+        success: false,
+        error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+      };
+    } else {
+      return { 
+        success: false, 
+        error: `Fehler bei der Analyse: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
+      };
+    }
   }
 }
