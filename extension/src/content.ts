@@ -219,32 +219,29 @@ async function addAiAnalysisTab(): Promise<void> {
     console.log('Added AI Analysis content panel');
     
     // Helper function to check cache status
-    async function checkCacheStatus(): Promise<CacheCheckResponse | null> {
-      console.log('[TRACE] checkCacheStatus called');
-      if (isCacheCheckInProgress) {
-        console.log('Cache check already in progress');
-        return null;
+    async function checkCacheStatus(): Promise<any> {
+      const pgn = extractPgn();
+      if (!pgn) {
+        return { ok: false, error: i18next.t('error.pgnExtract') };
       }
       
-      isCacheCheckInProgress = true;
+      // Detect locale (prefer i18next.language, fallback to detectLichessLanguage)
+      let detectedLocale = i18next.language;
+      if (!detectedLocale) {
+        detectedLocale = typeof detectLichessLanguage === 'function' ? detectLichessLanguage() : 'en';
+      }
+      
+      // Resolve locale to a supported language
+      const locale = resolveLanguageForPrompt(detectedLocale);
+      console.log('[LOCALE] Cache check with locale:', locale);
       
       try {
-        const pgn = extractPgn();
-        if (!pgn) {
-          console.error('No PGN found for cache check');
-          isCacheCheckInProgress = false;
-          return { error: i18next.t('error.noPGN') };
-        }
-        
         console.log('Checking cache for:', pgn.substring(0, 50) + '...');
         
-        const result = await requestCacheCheck(pgn);
-        isCacheCheckInProgress = false;
-        cachedResult = result;
+        const result = await requestCacheCheck(pgn, locale);
         return result;
       } catch (error) {
         console.error('Error during cache check:', error);
-        isCacheCheckInProgress = false;
         let errMsg = String(error);
         if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
           errMsg = i18next.t('error.serverUnreachable');

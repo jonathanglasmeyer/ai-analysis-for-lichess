@@ -51,13 +51,14 @@ export interface AnalysisMoment {
 /**
  * Checks if a PGN is already in the cache
  */
-export function requestCacheCheck(pgn: string): Promise<CacheCheckResponse> {
+export function requestCacheCheck(pgn: string, locale?: string): Promise<CacheCheckResponse> {
   return new Promise((resolve) => {
+    console.log('[LOCALE] checkCache called with locale:', locale);
     console.log('Sending cache check request for PGN:', pgn.substring(0, 50) + '...');
     
     try {
       chrome.runtime.sendMessage(
-        { type: 'CHECK_CACHE', pgn },
+        { type: 'CHECK_CACHE', pgn, locale },
         (response: CacheCheckResponse) => {
           console.log('Received cache check response:', JSON.stringify(response));
           

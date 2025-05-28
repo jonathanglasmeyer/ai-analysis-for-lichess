@@ -20,6 +20,7 @@ interface AnalyzeResponse {
 
 interface CheckCacheRequest {
   pgn: string;
+  locale?: string;
 }
 
 interface CheckCacheResponse {
@@ -49,32 +50,52 @@ async function initializeCache() {
 }
 
 // Generiere einen Hash für das PGN als Dateinamen
-function getCacheFilename(pgn: string): string {
-  const hash = crypto.createHash('md5').update(pgn).digest('hex');
+function getCacheFilename(pgn: string, locale?: string): string {
+  // Wenn eine Locale angegeben ist, füge sie zum Hash hinzu
+  const contentToHash = locale ? `${pgn}_${locale}` : pgn;
+  const hash = crypto.createHash('md5').update(contentToHash).digest('hex');
   return `${hash}.json`;
 }
 
 // Lade einen Cache-Eintrag
-async function loadFromCache(pgn: string): Promise<CacheEntry | null> {
+async function loadFromCache(pgn: string, locale?: string): Promise<CacheEntry | null> {
+  // Wenn eine Locale angegeben ist, versuche zuerst mit dieser Locale
+  if (locale) {
+    const cacheFileWithLocale = path.join(CACHE_DIR, getCacheFilename(pgn, locale));
+    console.log(`[CACHE] Versuche Cache mit Locale '${locale}' zu laden: ${cacheFileWithLocale}`);
+    
+    try {
+      const data = await fs.readFile(cacheFileWithLocale, 'utf-8');
+      console.log(`[CACHE] Cache-Eintrag mit Locale '${locale}' gefunden!`);
+      return JSON.parse(data) as CacheEntry;
+    } catch (error) {
+      console.log(`[CACHE] Kein Cache-Eintrag mit Locale '${locale}' gefunden`);
+      // Weiter zum Fallback ohne Locale
+    }
+  }
+  
+  // Fallback: Versuche ohne Locale (für Backward-Kompatibilität)
   const cacheFile = path.join(CACHE_DIR, getCacheFilename(pgn));
-  console.log(`Versuche Cache zu laden von: ${cacheFile}`);
+  console.log(`[CACHE] Versuche Cache ohne Locale zu laden: ${cacheFile}`);
   
   try {
     const data = await fs.readFile(cacheFile, 'utf-8');
-    console.log('Cache-Eintrag gefunden!');
+    console.log('[CACHE] Cache-Eintrag ohne Locale gefunden!');
     return JSON.parse(data) as CacheEntry;
   } catch (error) {
     // Datei existiert nicht oder kann nicht gelesen werden
-    console.log('Kein Cache-Eintrag gefunden:', error instanceof Error ? error.message : String(error));
+    console.log('[CACHE] Kein Cache-Eintrag gefunden');
     return null;
   }
 }
 
 // Speichere einen Eintrag im Cache
-async function saveToCache(pgn: string, entry: CacheEntry): Promise<void> {
+async function saveToCache(pgn: string, entry: CacheEntry, locale?: string): Promise<void> {
   try {
-    const cacheFile = path.join(CACHE_DIR, getCacheFilename(pgn));
+    // Speichere mit Locale, wenn angegeben
+    const cacheFile = path.join(CACHE_DIR, getCacheFilename(pgn, locale));
     await fs.writeFile(cacheFile, JSON.stringify(entry, null, 2), 'utf8');
+    console.log(`Cache-Eintrag gespeichert in: ${cacheFile}`);
   } catch (error) {
     console.error('Failed to save to cache:', error);
     // Wir lassen den Fehler hier nicht weiter propagieren, um den Hauptablauf nicht zu stören
@@ -258,23 +279,35 @@ app.get('/', (c) => {
 app.post('/check-cache', async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
+    console.log('[LOCALE] Cache check received locale:', body.locale);
     
     if (!body.pgn) {
       return c.json({ inCache: false }, 400);
     }
     
     // Normalisiere das PGN
+    console.log('[CACHE] Original PGN hash:', crypto.createHash('md5').update(body.pgn).digest('hex'));
     const normalizedPgn = body.pgn.trim();
+    console.log('[CACHE] Normalized PGN hash:', crypto.createHash('md5').update(normalizedPgn).digest('hex'));
+    console.log('[CACHE] Cache key with locale:', getCacheFilename(normalizedPgn, body.locale));
+    console.log('[CACHE] Cache key without locale:', getCacheFilename(normalizedPgn));
     
-    // Prüfe, ob die Analyse bereits im Cache ist
-    const cachedEntry = await loadFromCache(normalizedPgn);
+    // Prüfe, ob die Analyse bereits im Cache ist (mit Locale-Unterstützung)
+    console.log('[CACHE] Check-Cache: Trying to load with locale first');
+    let cachedEntry = await loadFromCache(normalizedPgn, body.locale);
+    
+    // Wenn kein Eintrag mit Locale gefunden wurde, versuche es ohne
+    if (!cachedEntry) {
+      console.log('[CACHE] Check-Cache: No entry with locale found, trying without locale');
+      cachedEntry = await loadFromCache(normalizedPgn);
+    }
     
     if (cachedEntry) {
       // Prüfe, ob der Cache-Eintrag noch gültig ist
       const now = Date.now();
       
       if (now - cachedEntry.timestamp < CACHE_EXPIRY) {
-        console.log('Cache check: HIT');
+        console.log('Cache check: HIT', body.locale ? 'mit Locale' : 'ohne Locale');
         
         // Gibt zurück, dass die Analyse im Cache ist, zusammen mit der Analyse selbst
         return c.json({
@@ -337,13 +370,24 @@ app.post('/analyze', async (c) => {
     }
     
     // Normalisiere das PGN (entferne Whitespace), um bessere Cache-Treffer zu erzielen
+    console.log('[CACHE] Analyze: Original PGN hash:', crypto.createHash('md5').update(body.pgn).digest('hex'));
     const normalizedPgn = body.pgn.trim();
+    console.log('[CACHE] Analyze: Normalized PGN hash:', crypto.createHash('md5').update(normalizedPgn).digest('hex'));
+    console.log('[CACHE] Analyze: Cache key with locale:', getCacheFilename(normalizedPgn, locale));
+    console.log('[CACHE] Analyze: Cache key without locale:', getCacheFilename(normalizedPgn));
     
     // Erstelle einen Hash-Schlüssel für das PGN
     const cacheKey = normalizedPgn;
     
-    // Prüfe, ob die Analyse bereits im Cache ist
-    const cachedEntry = await loadFromCache(normalizedPgn);
+    // Prüfe, ob die Analyse bereits im Cache ist (mit Locale-Unterstützung)
+    console.log('[CACHE] Analyze: Trying to load with locale first');
+    let cachedEntry = await loadFromCache(normalizedPgn, locale);
+    
+    // Wenn kein Eintrag mit Locale gefunden wurde, versuche es ohne
+    if (!cachedEntry) {
+      console.log('[CACHE] Analyze: No entry with locale found, trying without locale');
+      cachedEntry = await loadFromCache(normalizedPgn);
+    }
     
     if (cachedEntry) {
       // Prüfe, ob der Cache-Eintrag noch gültig ist
@@ -481,11 +525,11 @@ ${normalizedPgn}`;
         cached: false
       };
       
-      // Speichere die Antwort im Filesystem-Cache
+      // Speichere die Analyse im Cache (mit Locale, wenn vorhanden)
       await saveToCache(normalizedPgn, {
         timestamp: Date.now(),
         response: response
-      });
+      }, locale);
       
       // Logging
       console.log(`Saved analysis to filesystem cache`);

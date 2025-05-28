@@ -13,24 +13,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle cache check requests
   if (message.type === 'CHECK_CACHE') {
     console.log('Processing CHECK_CACHE request');
-    fetchCacheStatus(message.pgn)
+    console.log('[LOCALE] Cache check with locale:', message.locale);
+    
+    fetchCacheStatus(message.pgn, message.locale)
       .then((result: any) => {
-        // Stelle sicher, dass wir eine eindeutige Antwortstruktur haben
-        console.log('Cache check result (raw):', result);
-        
-        // Normalizing response format
-        const response = {
-          ok: true,  // Explizit ok-Flag setzen
-          ...result // Originaldaten beibehalten
-        };
-        
-        console.log('Sending normalized response to content script:', response);
-        sendResponse(response);
+        console.log('Cache check result:', result);
+        sendResponse(result);
       })
-      .catch((error: any) => {
-        console.error('Error checking cache:', error);
+      .catch((error) => {
+        console.error('Error during cache check:', error);
         if (error instanceof Error && error.name === 'AbortError') {
-          sendResponse({
+          sendResponse({ 
             ok: false,
             error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
           });
@@ -124,31 +117,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 /**
  * Checks if a PGN is in the cache
  */
-async function fetchCacheStatus(pgn: string) {
+async function fetchCacheStatus(pgn: string, locale?: string) {
   console.log('Starting cache check process with endpoint:', CACHE_CHECK_ENDPOINT);
   console.log('PGN length:', pgn.length, 'First 50 chars:', pgn.substring(0, 50));
   
   try {
-    console.log('Preparing to send fetch request...');
+    console.log('Checking cache status for PGN...');
+    console.log('[LOCALE] Cache check with locale:', locale);
     
-    // Für Debugging: Direkter Zugriff auf die API ohne fetch
-    const mockResponse = {
-      ok: true,
-      summary: '',
-      moments: []
-    };
+    // Normalisiere PGN (Entferne Kommentare, Leerzeilen, etc.)
+    const normalizedPgn = pgn.replace(/\{[^\}]*\}/g, '').replace(/\([^\)]*\)/g, '').trim();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     
     try {
-      console.log('Sending fetch request to cache API...');
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s Timeout
-      
-      const response = await fetch(CACHE_CHECK_ENDPOINT, {
+      console.log('Sending cache check request to server...');
+      const response = await fetch(`${CACHE_CHECK_ENDPOINT}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pgn }),
+        body: JSON.stringify({ 
+          pgn: normalizedPgn,
+          locale: locale
+        }),
         signal: controller.signal
       }).catch(e => {
         console.error('Fetch execution error:', e);
