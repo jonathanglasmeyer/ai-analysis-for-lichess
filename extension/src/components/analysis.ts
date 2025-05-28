@@ -754,12 +754,7 @@ export function injectAICommentStyles(): void {
       color: #805AD5; /* Also reasoning in purple */
       margin-top: 2px;
     }
-    
-    .ai-magic-icon {
-      display: inline-block;
-      margin-right: 4px;
-      font-size: 14px;
-    }
+   
   `;
   
   document.head.appendChild(styleSheet);
@@ -771,7 +766,6 @@ export function injectAICommentStyles(): void {
 export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): void {
   // Emoji for magic: ✨ (Sparkles)
   element.innerHTML = `
-    <span class="ai-magic-icon">✨</span>
     ${moment.comment || ''}
     ${moment.recommendation ? `
       <div class="ai-recommendation">
