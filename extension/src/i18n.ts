@@ -5,6 +5,7 @@ const resources = {
     translation: {
       'analysis.title': 'AI Analysis',
       'analysis.create': 'Create AI Analysis',
+      'analysis.better': 'Better:',
       'status.analyzing': 'Analyzing game...',
       'status.checkingCache': 'Checking cache...',
       'status.searchingExisting': 'Looking for existing analysis for this game.',
@@ -23,6 +24,7 @@ const resources = {
     translation: {
       'analysis.title': 'AI Analyse',
       'analysis.create': 'AI ANALYSE ERSTELLEN',
+      'analysis.better': 'Besser:',
       'status.analyzing': 'Analysiere Partie...',
       'status.checkingCache': 'Prüfe Cache...',
       'status.searchingExisting': 'Suche nach bestehenden Analysen für diese Partie.',

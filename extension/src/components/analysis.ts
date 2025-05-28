@@ -149,16 +149,12 @@ function convertMovesToLinks(text: string): HTMLDivElement {
     // Link erstellen
     const moveLink = document.createElement('a');
     moveLink.href = '#';
-    moveLink.className = 'move-link';
+    moveLink.className = 'ai-highlighted-move';
     
     // Erstelle den Linktext OHNE eckige Klammern
     moveLink.textContent = `${moveNumber}${dots} ${notation}`; // z.B. "14. Qxd8" statt "[14. Qxd8]"
     
-    moveLink.style.backgroundColor = 'rgba(128, 90, 213, 0.1)'; // Leichter lila Hintergrund
-    moveLink.style.borderRadius = '3px';
-    moveLink.style.padding = '0 3px';
-    moveLink.style.textDecoration = 'none';
-    moveLink.style.color = 'inherit';
+
     
     // Daten zum Zug speichern für Event-Handler
     moveLink.dataset.moveNumber = moveNumber;
@@ -651,38 +647,62 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
  */
 export function injectAICommentStyles(): void {
   if (document.getElementById('ai-comment-styles')) return;
-  
+
   const styleSheet = document.createElement('style');
   styleSheet.id = 'ai-comment-styles';
-  styleSheet.innerHTML = `
-    .ai-comment {
-      color: #805AD5 !important; /* Purple color for all AI comments */
-      padding: 5px 0;
-    }
-    
-    .ai-highlighted-move {
-      background-color: rgba(128, 90, 213, 0.2) !important;
-      border-radius: 3px;
-    }
-    
-    .ai-recommendation {
-      color: #805AD5; /* Keep purple color */
-      margin-top: 3px;
-    }
-    
-    .ai-recommendation-move {
-      font-weight: bold; /* Only the move suggestion itself is bold */
-    }
-    
-    .ai-reasoning {
-      color: #805AD5; /* Also reasoning in purple */
-      margin-top: 2px;
-    }
-   
-  `;
-  
   document.head.appendChild(styleSheet);
+
+  function setJWColors(isDark: boolean) {
+    console.log('setJWColors', isDark);
+    styleSheet.innerHTML = `
+      .ai-comment, .ai-analysis-tab-label {
+        color: ${isDark ? '#bfaee9' : '#8357e9'};
+        padding: 5px 0;
+      }
+      /* move highlights in summary */
+      .ai-highlighted-move {
+        background-color: ${isDark ? 'hsl(258deg 78% 74% / 34%)' : 'rgb(210 200 233 / 40%)'} !important;
+        color: inherit;
+        text-decoration: none;
+        padding: 0 3px;
+        border-radius: 3px;
+      }
+      .ai-highlighted-move,
+      .ai-highlighted-move a,
+      .ai-highlighted-move a:visited,
+      .ai-highlighted-move a:hover,
+      .ai-highlighted-move a:active {
+        color: inherit !important;
+        -webkit-text-fill-color: inherit !important;
+        text-decoration: none !important;
+        background-color: inherit;
+      }
+      .ai-highlighted-move {
+        background-color: ${isDark ? 'hsl(258deg 78% 74% / 34%)' : 'rgb(210 200 233 / 40%)'} !important;
+      }
+      .ai-highlighted-move:hover, .ai-highlighted-move:active {
+        background-color: ${isDark ? 'hsl(258deg 78% 74% / 34%)' : 'rgb(210 200 233 / 40%)'} !important;
+      }
+      .ai-recommendation {
+        margin-top: 3px;
+      }
+      .ai-recommendation-move {
+        font-weight: bold;
+      }
+    `;
+  }
+
+  // Initial set
+  setJWColors(document.body.classList.contains('dark'));
+
+  // Listen for Lichess theme changes
+  const observer = new MutationObserver(() => {
+    const isDark = document.body.classList.contains('dark');
+    setJWColors(isDark);
+  });
+  observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 }
+
 
 /**
  * Inserts an AI comment into an element
@@ -693,8 +713,8 @@ export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): v
     ${moment.comment || ''}
     ${moment.recommendation ? `
       <div class="ai-recommendation">
-        <span class="ai-recommendation-move">Besser: ${moment.recommendation}</span>
-        <div class="ai-reasoning">${moment.reasoning || ''}</div>
+        <span class="ai-recommendation-move">${i18next.t('analysis.better')} ${moment.recommendation}</span>
+        <div>${moment.reasoning || ''}</div>
       </div>
     ` : ''}
   `;

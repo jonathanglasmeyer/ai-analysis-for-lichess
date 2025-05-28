@@ -102,8 +102,11 @@ async function addAiAnalysisTab(): Promise<void> {
     // Add span with text like the other tabs
     const tabSpan = document.createElement('span');
     tabSpan.textContent = i18next.t('analysis.title');
-    tabSpan.style.color = '#805AD5'; // Purple color, same as in move highlights
+    tabSpan.classList.add('ai-analysis-tab-label');
     aiTab.appendChild(tabSpan);
+
+    // Inject AI styles up-front so the tab is styled immediately
+    import('./components/analysis').then(mod => mod.injectAICommentStyles());
     
     // Insert tab as third tab (before phone icon)
     const phoneTab = tabsContainer.querySelector('.palantir-slot');
