@@ -107,11 +107,12 @@ const styles = {
   emptyState: `color: #666; text-align: center; padding: 20px 0;`,
   infoText: `margin-top: 15px; font-size: 0.9em; color: #666;`,
   summaryContainer: `
-    max-height: 350px; 
+    max-height: calc(100vh - 120px); 
     overflow-y: auto; 
     font-size: 95%; 
     white-space: pre-line; 
     padding-right: 8px;
+    padding-bottom: 10px;
     margin: 0;
     overflow-wrap: break-word;
   `
@@ -795,11 +796,18 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   container.innerHTML = '';
   container.style.padding = '0';
   container.style.margin = '0';
-  
+  container.style.height = '100%';
+  container.style.display = 'flex';
+  container.style.flexDirection = 'column';
+
   const content = document.createElement('div');
   content.className = 'chess-gpt-analysis-content';
   content.style.padding = '0';
   content.style.margin = '0';
+  content.style.flex = '1';
+  content.style.display = 'flex';
+  content.style.flexDirection = 'column';
+  content.style.minHeight = '0';
   
   if (hasAnalysis) {
     // Analyse-Inhalt erstellen
@@ -807,15 +815,21 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
     analysisContent.className = 'analysis-content';
     analysisContent.style.margin = '0';
     analysisContent.style.padding = '10px';
+    analysisContent.style.flex = '1';
+    analysisContent.style.display = 'flex';
+    analysisContent.style.flexDirection = 'column';
+    analysisContent.style.minHeight = '0';
     
     // Scrollbaren Container für die Zusammenfassung erstellen
     const summaryContainer = document.createElement('div');
     summaryContainer.className = 'summary-container';
-    summaryContainer.style.maxHeight = '350px';
+    summaryContainer.style.flex = '1';
+    summaryContainer.style.minHeight = '0'; // Important for flexbox scrolling
     summaryContainer.style.overflowY = 'auto';
     summaryContainer.style.fontSize = '95%';
     summaryContainer.style.whiteSpace = 'pre-line';
-    summaryContainer.style.padding = '10px';
+    summaryContainer.style.paddingRight = '8px';
+    summaryContainer.style.paddingBottom = '10px';
     summaryContainer.style.margin = '0';
     summaryContainer.style.overflowWrap = 'break-word';
     
