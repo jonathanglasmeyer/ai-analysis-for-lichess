@@ -5,7 +5,8 @@
   "description": "Integriert KI-gestützte Schachanalysen direkt in Lichess",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
-    "https://lichess.org/*"
+    "https://lichess.org/*",
+    "http://localhost:3001/*"
   ],
   "background": {
     "service_worker": "background.js"

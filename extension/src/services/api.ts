@@ -9,9 +9,16 @@ const ANALYZE_ENDPOINT = 'https://chessgpt.com/api/analyze';
 export interface CacheCheckResponse {
   ok?: boolean;
   error?: string;
+  details?: string;
   inCache?: boolean;
   summary?: string;
   moments?: AnalysisMoment[];
+  data?: {
+    ok?: boolean;
+    error?: string;
+    summary?: string;
+    moments?: AnalysisMoment[];
+  };
   originalResponse?: {
     analysis?: {
       summary?: string;
@@ -23,7 +30,10 @@ export interface CacheCheckResponse {
 export interface AnalysisResponse {
   success?: boolean;
   error?: string;
+  details?: string;
   data?: {
+    ok?: boolean;
+    error?: string;
     summary?: string;
     moments?: AnalysisMoment[];
   };
@@ -71,26 +81,34 @@ export function requestCacheCheck(pgn: string): Promise<CacheCheckResponse> {
 /**
  * Sends a PGN for analysis
  */
-export function requestAnalysis(pgn: string): Promise<AnalysisResponse> {
+export function requestAnalysis(pgn: string, locale?: string): Promise<AnalysisResponse> {
   return new Promise((resolve) => {
     console.log('Sending analysis request for PGN:', pgn.substring(0, 50) + '...');
     
+    let didRespond = false;
     try {
       chrome.runtime.sendMessage(
-        { type: 'ANALYZE_PGN', pgn },
+        { type: 'ANALYZE_PGN', pgn, locale },
         (response: AnalysisResponse) => {
-          console.log('Received analysis response:', JSON.stringify(response));
-          
-          // Stellen sicher, dass die Antwort der erwarteten Struktur entspricht
-          if (!response) {
-            console.warn('Empty analysis response received from background script');
-            resolve({ success: false, error: 'Keine Antwort vom Hintergrundskript erhalten' });
+          didRespond = true;
+          console.log('Received analysis response');
+          // Ensure structured error for empty/undefined response
+          if (!response || typeof response !== 'object') {
+            console.warn('Empty or invalid analysis response received from background script');
+            resolve({ success: false, error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.' });
             return;
           }
-          
           resolve(response);
         }
       );
+      // Fallback: if callback not called, resolve after timeout
+      // Erhöhe Timeout auf 60 Sekunden, da die Analyse länger dauern kann
+      setTimeout(() => {
+        if (!didRespond) {
+          console.log('[DEBUG] Timeout reached (60s), callback never called!');
+          resolve({ success: false, error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.' });
+        }
+      }, 60000);
     } catch (error) {
       console.error('Error sending analysis request to background script:', error);
       resolve({ success: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript' });

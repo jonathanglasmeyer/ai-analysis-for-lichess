@@ -9,6 +9,7 @@ import * as crypto from 'node:crypto';
 // Types
 interface AnalyzeRequest {
   pgn: string;
+  locale?: string;
 }
 
 interface AnalyzeResponse {
@@ -302,6 +303,10 @@ app.post('/check-cache', async (c) => {
 app.post('/analyze', async (c) => {
   try {
     const body = await c.req.json<AnalyzeRequest>();
+    const locale = (body.locale && ['de', 'en'].includes(body.locale)) ? body.locale : 'de';
+    // Map locale to language name for system prompt
+    const localeLang = locale === 'en' ? 'Englisch' : 'Deutsch';
+    console.log(`[ANALYZE] Received locale from frontend:`, body.locale, '| Used locale:', locale, '| Language for system prompt:', localeLang);
     
     if (!body.pgn) {
       return c.json({ ok: false, error: 'Missing PGN data' }, 400);
@@ -339,65 +344,93 @@ app.post('/analyze', async (c) => {
     try {
       console.log('Cache miss, calling Anthropic API');
       
-      const prompt = `Du bist ein Schachexperte. Bitte analysiere die folgende Partie und gib die Antwort im **JSON-Format** zurück.
-      Gib die Antwort ausschließlich als valide JSON-Struktur zurück. Keine Kommentare, keine Einleitung, keine Erklärungen außerhalb des JSON! 
-      Benutze ausschließlich gültige JSON-Syntax, insbesondere keine abschließenden Klammern oder Kommata an falscher Stelle. 
-      Benutze ausschließlich doppelte Anführungszeichen (") und keine typografischen Zeichen.
-      
-      Beispiel:
-      {
-        "summary": "string",
-        "moments": [
-          {
-            "ply": 0,
-            "move": "string",
-            "color": "white|black",
-            "comment": "string",
-            "recommendation": "string",
-            "reasoning": "string"
-          }
-        ]
-      }
-      
+      // Verwende einen einheitlichen englischen Prompt - die Sprache wird über den System-Prompt gesteuert
+      const prompt = `You are a chess expert. Please analyze the following game and provide the response in **JSON format**.
+Provide the response exclusively as a valid JSON structure. No comments, no introduction, no explanations outside the JSON!
+Use only valid JSON syntax, especially no trailing brackets or commas in the wrong place.
+Use only double quotes (") and no typographic characters.
 
-1. "summary": Eine Gesamteinschätzung , in der du erklärst:
-   - Wer wann die Initiative hatte
-   - Was strategisch interessant war
-   - Wo der entscheidende Wendepunkt der Partie lag
-   - Was der Spieler aus der Partie lernen kann
-   	•	Verwende bildhafte und anschauliche Sprache, um die Dynamik und Dramatik der Partie einzufangen. Analysiere, warum bestimmte Züge die Initiative verschieben, und erläutere kurz die wichtigsten taktischen und strategischen Motive, die dabei eine Rolle spielen.
-	•	Gib konkrete Beispiele für Varianten oder Motive, wenn sie für das Verständnis wesentlich sind.
-	•	Stelle im Fazit klar heraus, welche konkreten Lektionen aus der Partie für ähnliche Situationen abgeleitet werden können. Formuliere einprägsam und greifbar.
-	•	Wenn möglich, arbeite heraus, wie sich die psychologische Situation der Spieler während der Partie gewandelt haben könnte.
+Example:
+{
+  "summary": "string",
+  "moments": [
+    {
+      "ply": 0,
+      "move": "string",
+      "color": "white|black",
+      "comment": "string",
+      "recommendation": "string",
+      "reasoning": "string"
+    }
+  ]
+}
 
-   Innerhalb der Summary sollst du Referenzen auf Züge immer eindeutig identifizieren in folgender Form, z.B. [14. Nf3], oder bei schwarz [14... Nf6]. 
+1. "summary": An overall assessment where you explain:
+   - Who had the initiative and when
+   - What was strategically interesting
+   - Where the decisive turning point of the game was
+   - What the player can learn from the game
+   	•	Use vivid and illustrative language to capture the dynamics and drama of the game. Analyze why certain moves shift the initiative, and briefly explain the most important tactical and strategic motifs that play a role.
+	•	Give concrete examples of variations or motifs if they are essential for understanding.
+	•	In the conclusion, clearly highlight what concrete lessons can be derived from the game for similar situations. Formulate memorably and tangibly.
+	•	If possible, work out how the psychological situation of the players might have changed during the game.
 
-2. "moments": Eine Liste der **5 bis 10 wichtigsten oder lehrreichsten Züge** (kritische Momente), jeweils mit:
-   - \`ply\`: Halbzugnummer (z. B. 14 = 7... für Schwarz)
-   - \`move\`: Der gespielte Zug in SAN-Notation (z. B. Nf3, Qxd5, O-O)
-   - \`color\`: \`"white"\` oder \`"black"\`
-   - \`comment\`: Eine gut verständliche Erklärung, warum der Zug problematisch oder besonders war
-   - \`recommendation\`: Ein besserer Zugvorschlag (in SAN)
-   - \`reasoning\`: Eine menschlich erklärende Begründung, warum der Alternativzug besser ist
-   - (optional) \`eval\`: Bewertung vor und nach dem Zug (z. B. \`+0.3 → -1.2\`), falls bekannt
+   Within the summary, you should always clearly identify references to moves in the following form, e.g. [14. Nf3], or for black [14... Nf6].
 
-Bitte schreibe die Analyse so, dass sie für fortgeschrittene Anfänger bis unteres Klubniveau (ca. 1400) verständlich und nützlich ist. Gib **keinen Text außerhalb des JSON-Blocks** zurück.
+2. "moments": A list of the **5 to 10 most important or instructive moves** (critical moments), each with:
+   - \`ply\`: Half-move number (e.g. 14 = 7... for Black)
+   - \`move\`: The move played in SAN notation (e.g. Nf3, Qxd5, O-O)
+   - \`color\`: \`"white"\` or \`"black"\`
+   - \`comment\`: Explanation of why this move is important, what it achieves, or why it's good/bad
+   - \`recommendation\`: (optional) A better move if the played move wasn't optimal
+   - \`reasoning\`: (optional) Why the recommended move would have been better
+   - (optional) \`eval\`: Evaluation before and after the move (e.g. \`+0.3 → -1.2\`), if known
 
-Hier ist die Partie im PGN-Format:
+Write the analysis so that it is understandable and useful for advanced beginners up to lower club level (around 1400 Elo). **Do not return any text outside the JSON block.**
 
+Here is the game in PGN format:
 ${normalizedPgn}`;
 
-      const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 10000,
-        temperature: 0.5,
-        system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. 
-        Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. 
-        Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen.`,
-        messages: [
-          { role: "user", content: prompt }
-        ]
-      });
+      // Definiere Modelle für primäre Nutzung und Fallback
+      const primaryModel = "claude-sonnet-4-20250514";
+      const fallbackModel = "claude-3-sonnet@20240229";
+      let modelToUse = primaryModel;
+      let message;
+      
+      try {
+        console.log(`Attempting analysis with primary model: ${primaryModel}`);
+        message = await anthropic.messages.create({
+          model: modelToUse,
+          max_tokens: 10000,
+          temperature: 0.5,
+          system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen. Antworte auf ${localeLang}.`,
+          messages: [
+            { role: "user", content: prompt }
+          ]
+        });
+      } catch (primaryModelError) {
+        // Prüfe, ob der Fehler eine Überlastung des Modells anzeigt
+        const errorString = String(primaryModelError);
+        if (errorString.includes('Overloaded') || errorString.includes('529')) {
+          console.log(`Primary model ${primaryModel} overloaded, attempting fallback to ${fallbackModel}`);
+          modelToUse = fallbackModel;
+          
+          // Versuche es mit dem Fallback-Modell
+          message = await anthropic.messages.create({
+            model: modelToUse,
+            max_tokens: 10000,
+            temperature: 0.5,
+            system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen. Antworte auf ${localeLang}.`,
+            messages: [
+              { role: "user", content: prompt }
+            ]
+          });
+          console.log(`Successfully used fallback model ${fallbackModel} for analysis`);
+        } else {
+          // Wenn es ein anderer Fehler ist, wirf ihn weiter
+          throw primaryModelError;
+        }
+      }
 
       // Die aktuelle Anthropic SDK-Version gibt das Ergebnis in einer anderen Struktur zurück
       let summary = '';

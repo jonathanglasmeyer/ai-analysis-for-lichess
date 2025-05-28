@@ -48,39 +48,71 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle analysis requests
   if (message.type === 'ANALYZE_PGN') {
     console.log('Processing ANALYZE_PGN request');
-    performAnalysis(message.pgn)
+    
+    // Lokale Kopie von sendResponse für asynchrone Kontexte
+    const sendResponseSafe = sendResponse;
+    
+    performAnalysis(message.pgn, message.locale)
       .then((result: any) => {
-        console.log('Analysis result (raw):', result);
+        console.log('Analysis result (raw):', JSON.stringify(result));
         
         // Stelle sicher, dass die Antwort konsistent ist
-        const response = {
-          success: true, // Explizites Erfolgs-Flag
-          ...result // Originaldaten beibehalten
+        let response: any = {
+          success: true,
+          ...result
         };
         
-        // Wenn data nicht vorhanden ist, aber Daten in der Wurzel sind, diese in data verschieben
-        if (!response.data && (response.summary || response.moments)) {
-          response.data = {
-            summary: response.summary,
-            moments: response.moments
-          };
+        // Immer alles in data kapseln, falls nicht vorhanden
+        if (!response.data) {
+          response.data = {};
         }
         
-        console.log('Sending normalized analysis response:', response);
-        sendResponse(response);
+        // Kopiere alle relevanten Felder in data, falls sie an der Wurzel liegen
+        for (const key of ['summary', 'moments', 'ok', 'error', 'details']) {
+          if (typeof response[key] !== 'undefined') {
+            response.data[key] = response[key];
+            delete response[key];
+          }
+        }
+        
+        // Stelle sicher, dass ok: true im data-Objekt ist
+        if (response.data && !('ok' in response.data)) {
+          response.data.ok = true;
+        }
+        
+        console.log('Sending normalized analysis response:', JSON.stringify(response));
+        try {
+          sendResponseSafe(response);
+        } catch (sendError) {
+          console.error('Error sending response to content script:', sendError);
+        }
       })
       .catch((error: any) => {
         console.error('Error analyzing PGN:', error);
+        console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
+        console.error('Error details:', error instanceof Error ? error.message : String(error));
+        
         if (error instanceof Error && error.name === 'AbortError') {
-          sendResponse({
-            success: false,
-            error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
-          });
+          console.log('Detected AbortError, returning server unreachable message');
+          try {
+            sendResponseSafe({
+              success: false,
+              error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+            });
+          } catch (sendError) {
+            console.error('Error sending AbortError response:', sendError);
+          }
         } else {
-          sendResponse({ 
-            success: false, 
-            error: 'Fehler bei der Analyse: ' + (error?.message || String(error)) 
-          });
+          const errorMessage = `Fehler bei der Analyse: ${error instanceof Error ? error.message : String(error)}`;
+          console.log('Returning error message:', errorMessage);
+          try {
+            sendResponseSafe({ 
+              success: false, 
+              error: errorMessage
+            });
+          } catch (sendError) {
+            console.error('Error sending error response:', sendError);
+          }
         }
       });
     
@@ -168,7 +200,7 @@ async function fetchCacheStatus(pgn: string) {
 /**
  * Sends a PGN for analysis
  */
-async function performAnalysis(pgn: string) {
+async function performAnalysis(pgn: string, locale?: string) {
   console.log('Starting analysis process with endpoint:', ANALYZE_ENDPOINT);
   console.log('PGN length for analysis:', pgn.length, 'First 50 chars:', pgn.substring(0, 50));
   
@@ -185,7 +217,9 @@ async function performAnalysis(pgn: string) {
     };
     
     try {
-      console.log('Sending fetch request for analysis...');
+      console.log('Sending fetch request for analysis to:', ANALYZE_ENDPOINT);
+      console.log('Request payload:', { pgn: pgn.substring(0, 50) + '...', locale });
+      
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000); // 120s Timeout (2 Minuten) für die Analyse, da Anthropic länger brauchen kann
       
@@ -194,13 +228,11 @@ async function performAnalysis(pgn: string) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pgn }),
+        body: JSON.stringify({ pgn, locale }),
         signal: controller.signal
-      }).catch(e => {
-        console.error('Analysis fetch execution error:', e);
-        throw e;
       });
       
+      console.log('Fetch completed successfully, status:', response.status);
       clearTimeout(timeoutId);
       console.log('Received analysis response, status:', response.status);
       
@@ -215,8 +247,20 @@ async function performAnalysis(pgn: string) {
         throw e;
       });
       
-      console.log('Analysis API response parsed successfully:', result);
+      console.log('Analysis API response parsed successfully. Raw result:', JSON.stringify(result));
       
+      // Error handling: If backend returned ok: false, surface error and set success: false
+      if (result && result.ok === false) {
+        console.log('Server returned ok: false, creating error response with:', {
+          error: result.error,
+          details: result.details
+        });
+        return {
+          success: false,
+          error: result.error || 'Server returned an unknown error',
+          details: result.details
+        };
+      }
       // Standardisiere die Antwortstruktur
       const standardizedResponse = {
         success: true,
@@ -227,28 +271,50 @@ async function performAnalysis(pgn: string) {
       if (!result.data && (result.summary || result.moments)) {
         console.log('Restructuring analysis response: moving root data to data field');
         standardizedResponse.data = {
+          ok: true, // Explizit ok:true setzen für Frontend-Checks
           summary: result.summary || '',
           moments: result.moments || []
         };
       }
       
-      console.log('Returning standardized analysis response');
+      console.log('Returning standardized analysis response:', JSON.stringify(standardizedResponse));
       return standardizedResponse;
-    } catch (fetchError) {
+    } catch (fetchError: unknown) {
       console.error('Error during analysis fetch operation:', fetchError);
+      if (fetchError instanceof Error) {
+        console.error('Error type:', fetchError.constructor.name);
+        console.error('Error message:', fetchError.message);
+        console.error('Error stack:', fetchError.stack);
+      } else {
+        console.error('Non-Error object thrown:', typeof fetchError);
+      }
       throw fetchError;
     }
-  } catch (outerError) {
+  } catch (outerError: unknown) {
     console.error('Critical error in analysis function:', outerError);
-    if (outerError instanceof Error && outerError.name === 'AbortError') {
+    if (outerError instanceof Error) {
+      console.error('Error type:', outerError.constructor.name);
+      console.error('Full error details:', outerError);
+      
+      if (outerError.name === 'AbortError') {
+        console.log('Detected AbortError, returning server unreachable message');
+        return {
+          success: false,
+          error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
+        };
+      } else {
+        const errorMessage = `Fehler bei der Analyse: ${outerError.message}`;
+        console.log('Returning error message:', errorMessage);
+        return { 
+          success: false, 
+          error: errorMessage
+        };
+      }
+    } else {
+      console.error('Non-Error object caught:', typeof outerError);
       return {
         success: false,
-        error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
-      };
-    } else {
-      return { 
-        success: false, 
-        error: `Fehler bei der Analyse: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
+        error: `Fehler bei der Analyse: ${String(outerError)}`
       };
     }
   }
