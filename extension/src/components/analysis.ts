@@ -215,105 +215,28 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
       const moveText = `${moveNumber}${isWhite ? '.' : '...'} ${notation}`;
       let targetMove: Element | null = null;
       
-      // METHODE 1: Suche nach dem SAN-Element innerhalb der move-Elemente
-      const sanElements = moveContainer.querySelectorAll('move san');
-      for (const san of Array.from(sanElements)) {
-        if (san.textContent && san.textContent.trim() === notation) {
-          // Finde das übergeordnete move-Element
-          const moveParent = san.closest('move');
-          if (moveParent) {
-            // Prüfe, ob es zum richtigen Zug gehört (weiß/schwarz)
-            const indexElem = moveParent.previousElementSibling;
-            if (indexElem && indexElem.tagName.toLowerCase() === 'index') {
-              const indexText = indexElem.textContent || '';
-              const numberMatch = indexText.match(/(\d+)/);
-              if (numberMatch && parseInt(numberMatch[1], 10) === moveNum) {
-                targetMove = moveParent;
-                break;
-              }
-            }
+      // ROBUSTE SUCHE: Finde das passende Move-Element anhand von Zugnummer und SAN
+      const moveElements = moveContainer.querySelectorAll('move');
+      console.group('DEBUG: Move DOM-Scan');
+      console.log('Gesucht:', { moveNumber, notation });
+      for (const moveEl of Array.from(moveElements)) {
+        const san = moveEl.querySelector('san');
+        // Rückwärts laufen bis zum nächsten index-Element (überspringt leere/intermediate Elemente)
+        let prev = moveEl.previousElementSibling;
+        let foundIndex = null;
+        while (prev) {
+          if (prev.tagName.toLowerCase() === 'index') {
+            foundIndex = prev.textContent?.trim();
+            break;
           }
+          prev = prev.previousElementSibling;
         }
-      }
-      
-      // METHODE 2: Suche nach move-Elementen direkt
-      if (!targetMove) {
-        const moves = moveContainer.querySelectorAll('move');
-        for (const move of Array.from(moves)) {
-          // Prüfe zuerst auf san-Element im move
-          const sanElem = move.querySelector('san');
-          if (sanElem && sanElem.textContent && sanElem.textContent.trim() === notation) {
-            // Für schwarze Züge: Prüfe vorheriges Element auf index mit richtiger Nummer
-            if (!isWhite) {
-              let prev = move.previousElementSibling;
-              while (prev) {
-                if (prev.tagName.toLowerCase() === 'index' && 
-                    prev.textContent && prev.textContent.includes(moveNumber)) {
-                  targetMove = move;
-                  break;
-                }
-                prev = prev.previousElementSibling;
-              }
-            } 
-            // Für weiße Züge: Prüfe vorheriges Element direkt
-            else if (move.previousElementSibling && 
-                     move.previousElementSibling.tagName.toLowerCase() === 'index' && 
-                     move.previousElementSibling.textContent && 
-                     move.previousElementSibling.textContent.includes(moveNumber)) {
-              targetMove = move;
-              break;
-            }
-          } 
-          // Prüfe direkt auf move-Text
-          else if (move.textContent && move.textContent.includes(moveText)) {
-            // Ist es ein weißer Zug direkt nach einer Indexnummer?
-            if (isWhite && move.previousElementSibling && 
-                move.previousElementSibling.tagName.toLowerCase() === 'index' && 
-                move.previousElementSibling.textContent && 
-                move.previousElementSibling.textContent.includes(moveNumber)) {
-              targetMove = move;
-              break;
-            }
-            // Ist es ein schwarzer Zug nach einem weißen Zug?
-            else if (!isWhite && move.previousElementSibling && 
-                     move.previousElementSibling.textContent && 
-                     move.previousElementSibling.tagName.toLowerCase() === 'move') {
-              const prevIndex = move.previousElementSibling.previousElementSibling;
-              if (prevIndex && prevIndex.textContent && 
-                  prevIndex.tagName.toLowerCase() === 'index' && 
-                  prevIndex.textContent.includes(moveNumber)) {
-                targetMove = move;
-                break;
-              }
-            }
-          }
-        }
-      }
-      
-      // METHODE 3: Versuche eine direkte Zuordnung über die Indexnummer
-      if (!targetMove) {
-        const indexElems = moveContainer.querySelectorAll('index');
-        for (const indexElem of Array.from(indexElems)) {
-          if (indexElem.textContent && indexElem.textContent.includes(moveNumber)) {
-            let targetMove: Element | null = null;
-            // Für weißen Zug nehmen wir das direkt folgende Element
-            if (isWhite) {
-              targetMove = indexElem.nextElementSibling;
-            } 
-            // Für schwarzen Zug nehmen wir das übernächste Element
-            else {
-              targetMove = indexElem.nextElementSibling?.nextElementSibling || null;
-            }
-            
-            if (targetMove && targetMove.tagName.toLowerCase() === 'move') {
-              // Noch einmal den Text prüfen, wenn möglich
-              const moveText = targetMove.textContent || '';
-              if (moveText.includes(notation) || !notation) {
-                targetMove = targetMove;
-                break;
-              }
-            }
-          }
+        console.log('DOM:', { foundIndex, san: san?.textContent?.trim() });
+        if (!san || san.textContent?.trim() !== notation) continue;
+        if (foundIndex === moveNumber) {
+          targetMove = moveEl;
+          console.log('TREFFER:', { foundIndex, san: san.textContent?.trim() });
+          break;
         }
       }
       
