@@ -48,6 +48,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Handle analysis requests
   if (message.type === 'ANALYZE_PGN') {
     console.log('Processing ANALYZE_PGN request');
+    console.log('[LOCALE] Background received locale:', message.locale);
     
     // Lokale Kopie von sendResponse für asynchrone Kontexte
     const sendResponseSafe = sendResponse;

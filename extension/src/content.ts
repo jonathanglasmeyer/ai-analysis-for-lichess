@@ -3,7 +3,7 @@
  */
 
 import { waitForElement, analyzeDOM } from './utils/dom';
-import { setupI18n, observeLanguageChange, detectLichessLanguage } from './i18n';
+import { setupI18n, observeLanguageChange, detectLichessLanguage, resolveLanguageForPrompt } from './i18n';
 import i18next from 'i18next';
 
 // Initialize i18n before any translations are used
@@ -59,15 +59,16 @@ async function startAnalysis(contentElement: HTMLElement): Promise<void> {
   // Extract PGN
   const pgn = extractPgn();
   // Detect locale (prefer i18next.language, fallback to detectLichessLanguage)
-  let locale = i18next.language;
-  if (!locale || !['en', 'de'].includes(locale)) {
-    locale = typeof detectLichessLanguage === 'function' ? detectLichessLanguage() : 'en';
+  let detectedLocale = i18next.language;
+  if (!detectedLocale) {
+    detectedLocale = typeof detectLichessLanguage === 'function' ? detectLichessLanguage() : 'en';
   }
-  if (!['en', 'de'].includes(locale)) locale = 'en';
-  console.log('[TRACE] Detected/sending locale to backend:', locale);
+  
+  // Resolve locale to a supported language
+  const locale = resolveLanguageForPrompt(detectedLocale);
+  console.log('[ANALYSIS] Detected locale:', detectedLocale, '| Using locale:', locale);
 
   if (!pgn) {
-    console.log('[TRACE] No PGN found, displaying error message');
     contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.pgnExtract')}</div>`;
     return;
   }

@@ -84,6 +84,7 @@ export function requestCacheCheck(pgn: string): Promise<CacheCheckResponse> {
 export function requestAnalysis(pgn: string, locale?: string): Promise<AnalysisResponse> {
   return new Promise((resolve) => {
     console.log('Sending analysis request for PGN:', pgn.substring(0, 50) + '...');
+    console.log('[LOCALE] API requestAnalysis received locale:', locale);
     
     let didRespond = false;
     try {

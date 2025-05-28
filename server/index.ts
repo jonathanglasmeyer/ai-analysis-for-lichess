@@ -303,10 +303,34 @@ app.post('/check-cache', async (c) => {
 app.post('/analyze', async (c) => {
   try {
     const body = await c.req.json<AnalyzeRequest>();
-    const locale = (body.locale && ['de', 'en'].includes(body.locale)) ? body.locale : 'de';
+    const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';
     // Map locale to language name for system prompt
-    const localeLang = locale === 'en' ? 'Englisch' : 'Deutsch';
-    console.log(`[ANALYZE] Received locale from frontend:`, body.locale, '| Used locale:', locale, '| Language for system prompt:', localeLang);
+    // Liste der unterstützten Sprachen
+    const supportedLanguages = ['en', 'de', 'fr', 'es', 'it', 'pl', 'pt', 'nl'];
+    
+    // Funktion zur Auflösung der Sprache für den Prompt
+    function resolveLanguageForPrompt(userLang: string): string {
+      if (supportedLanguages.includes(userLang)) return userLang;
+      return 'en'; // Fallback
+    }
+    
+    // Bestimme die Sprache für den System-Prompt
+    const resolvedLang = resolveLanguageForPrompt(locale || 'en');
+    
+    // Mapping von Sprachcodes zu vollständigen Sprachnamen
+    const languageNames: Record<string, string> = {
+      'en': 'English',
+      'de': 'Deutsch',
+      'fr': 'Français',
+      'es': 'Español',
+      'it': 'Italiano',
+      'pl': 'Polski',
+      'pt': 'Português',
+      'nl': 'Nederlands'
+    };
+    
+    const localeLang = languageNames[resolvedLang];
+    console.log(`[LOCALE] Received locale from frontend:`, body.locale, '| Used locale:', locale, '| Resolved lang:', resolvedLang, '| Language for system prompt:', localeLang);
     
     if (!body.pgn) {
       return c.json({ ok: false, error: 'Missing PGN data' }, 400);
@@ -344,8 +368,12 @@ app.post('/analyze', async (c) => {
     try {
       console.log('Cache miss, calling Anthropic API');
       
+      // Erstelle den System-Prompt mit der gewünschten Sprache
+      const systemPrompt = `You are a helpful chess analysis assistant. Please provide your analysis in ${localeLang}. The entire response must be in ${localeLang}, including all explanations, move descriptions, and strategic insights.`;
+      console.log('[LOCALE] Setting system prompt with language:', localeLang);
+      
       // Verwende einen einheitlichen englischen Prompt - die Sprache wird über den System-Prompt gesteuert
-      const prompt = `You are a chess expert. Please analyze the following game and provide the response in **JSON format**.
+      const prompt = `Please analyze the following game and provide the response in **JSON format**.
 Provide the response exclusively as a valid JSON structure. No comments, no introduction, no explanations outside the JSON!
 Use only valid JSON syntax, especially no trailing brackets or commas in the wrong place.
 Use only double quotes (") and no typographic characters.
@@ -403,7 +431,7 @@ ${normalizedPgn}`;
           model: modelToUse,
           max_tokens: 10000,
           temperature: 0.5,
-          system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen. Antworte auf ${localeLang}.`,
+          system: systemPrompt,
           messages: [
             { role: "user", content: prompt }
           ]
@@ -420,7 +448,7 @@ ${normalizedPgn}`;
             model: modelToUse,
             max_tokens: 10000,
             temperature: 0.5,
-            system: `Du bist ein erfahrener Schachtrainer, der präzise, verständliche und anschauliche Analysen schreibt. Deine Sprache ist klar und nachvollziehbar, nutzt gelegentlich bildhafte Vergleiche, bleibt dabei aber sachlich und vermeidet Übertreibungen. Ziel ist es, Partieanalysen interessant und einprägsam zu machen, ohne ins Dramatische oder Pathetische abzurutschen. Antworte auf ${localeLang}.`,
+            system: systemPrompt,
             messages: [
               { role: "user", content: prompt }
             ]
