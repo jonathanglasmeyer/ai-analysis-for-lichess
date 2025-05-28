@@ -656,7 +656,7 @@ export function injectAICommentStyles(): void {
     console.log('setJWColors', isDark);
     styleSheet.innerHTML = `
       .ai-comment, .ai-analysis-tab-label {
-        color: ${isDark ? '#bfaee9' : '#8357e9'};
+        color: ${isDark ? '#bfaee9' : '#835ed8'};
         padding: 5px 0;
       }
       /* move highlights in summary */
