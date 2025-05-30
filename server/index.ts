@@ -236,8 +236,9 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
-  'https://chess-gpt.vercel.app',
-  'https://chess-gpt-git-main.vercel.app'
+  'https://ai-analysis-for-lichess.vercel.app',
+  'https://ai-analysis-for-lichess-git-main.vercel.app',
+  'https://ai-analysis-for-lichess-api.onrender.com'
 ];
 
 const app = new Hono();

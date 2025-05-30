@@ -1,5 +1,5 @@
 {
-  "name": "chess-gpt-api",
+  "name": "ai-analysis-for-lichess-api",
   "version": "1.0.0",
   "module": "index.ts",
   "type": "module",

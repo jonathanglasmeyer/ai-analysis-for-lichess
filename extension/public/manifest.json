@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "ChessGPT Lichess Integration",
+  "name": "AI Analysis for Lichess",
   "version": "0.1.0",
   "description": "Integriert KI-gestützte Schachanalysen direkt in Lichess",
   "permissions": ["storage", "activeTab"],
   "host_permissions": [
     "https://lichess.org/*",
-    "http://localhost:3001/*"
+    "http://localhost:3001/*",
+    "https://ai-analysis-for-lichess-api.onrender.com/*"
   ],
   "background": {
     "service_worker": "background.js"

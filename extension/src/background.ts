@@ -2,9 +2,18 @@
  * Background script for the ChessGPT Lichess Extension
  */
 
-// API Endpoints - Lokale Entwicklungsserver
-const CACHE_CHECK_ENDPOINT = 'http://localhost:3001/check-cache';
-const ANALYZE_ENDPOINT = 'http://localhost:3001/analyze';
+// API Endpoints - Konfigurierbar für verschiedene Umgebungen
+// In einer Chrome Extension müssen wir einen anderen Ansatz verwenden, da process.env nicht verfügbar ist
+// Für die Produktion: Verwende die render.com URL
+// Für die Entwicklung: Verwende localhost
+const IS_PRODUCTION = true; // Setze auf false für lokale Entwicklung
+
+const API_BASE = IS_PRODUCTION
+  ? 'https://ai-analysis-for-lichess-api.onrender.com'
+  : 'http://localhost:3001';
+
+const CACHE_CHECK_ENDPOINT = `${API_BASE}/check-cache`;
+const ANALYZE_ENDPOINT = `${API_BASE}/analyze`;
 
 // Message handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

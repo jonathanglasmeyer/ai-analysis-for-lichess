@@ -1,7 +1,7 @@
 services:
   # A web service for the Chess-GPT API
   - type: web
-    name: chess-gpt-api
+    name: ai-analysis-for-lichess-api
     runtime: docker
     region: frankfurt # Change to your preferred region
     plan: free
