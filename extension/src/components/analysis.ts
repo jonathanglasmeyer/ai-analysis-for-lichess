@@ -121,61 +121,98 @@ const styles = {
 
 /**
  * Konvertiert Zugnotationen in klickbare Links
- * Erkennt Formate wie [14. Qxd8] oder [14...Qxd8]
+ * Erkennt verschiedene Formate von Schachzügen und wandelt sie in klickbare Links um
  */
 function convertMovesToLinks(text: string): HTMLDivElement {
-  // Regex für Zugnotationen im Format [Zugnummer. Notation] oder [Zugnummer... Notation]
-  const moveRegex = /\[(\d+)\s*(\.{1,3})\s*([^\]]+)\]/g;
-  
   // Container für den HTML-Inhalt
   const container = document.createElement('div');
   
-  // Text in Segmente aufteilen und Links einfügen
-  let lastIndex = 0;
-  let match;
+  // Entferne zunächst alle eckigen Klammern um Zugnotationen
+  let processedText = text.replace(/\[(\d+\s*\.{1,3}\s*[^\]]+)\]/g, '$1');
   
-  while ((match = moveRegex.exec(text)) !== null) {
+  // Definiere die Regex-Muster für weiße und schwarze Züge
+  // Beispiel: "1. e4" (weiß) oder "1... e5" (schwarz)
+  const whiteMoveRegex = /(\d+)\s*\.(?!\.+)\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7]+)/g;
+  const blackMoveRegex = /(\d+)\s*\.{2,3}\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7]+)/g;
+  
+  // Sammle alle Matches in einem Array
+  type MoveMatch = {
+    index: number;
+    length: number;
+    moveNumber: string;
+    notation: string;
+    isWhite: boolean;
+  };
+  
+  const allMatches: MoveMatch[] = [];
+  
+  // Erkenne weiße Züge
+  let whiteMatch;
+  while ((whiteMatch = whiteMoveRegex.exec(processedText)) !== null) {
+    allMatches.push({
+      index: whiteMatch.index,
+      length: whiteMatch[0].length,
+      moveNumber: whiteMatch[1],
+      notation: whiteMatch[2],
+      isWhite: true
+    });
+  }
+  
+  // Erkenne schwarze Züge
+  let blackMatch;
+  while ((blackMatch = blackMoveRegex.exec(processedText)) !== null) {
+    allMatches.push({
+      index: blackMatch.index,
+      length: blackMatch[0].length,
+      moveNumber: blackMatch[1],
+      notation: blackMatch[2],
+      isWhite: false
+    });
+  }
+  
+  // Sortiere alle Matches nach Position
+  allMatches.sort((a, b) => a.index - b.index);
+  
+  // Verarbeite den Text Segment für Segment
+  let lastIndex = 0;
+  
+  for (const match of allMatches) {
     // Text vor dem Match hinzufügen
     if (match.index > lastIndex) {
-      const textNode = document.createTextNode(text.substring(lastIndex, match.index));
-      container.appendChild(textNode);
+      container.appendChild(document.createTextNode(processedText.substring(lastIndex, match.index)));
     }
     
-    // Zugnotation extrahieren
-    const moveNumber = match[1]; // z.B. "14"
-    const dots = match[2];       // z.B. "." oder "..."
-    const notation = match[3];   // z.B. "Qxd8"
-    
-    // Link erstellen
+    // Erstelle den Link
     const moveLink = document.createElement('a');
     moveLink.href = '#';
     moveLink.className = 'ai-highlighted-move';
+    moveLink.style.color = '#3692e7';
+    moveLink.style.textDecoration = 'underline';
     
-    // Erstelle den Linktext OHNE eckige Klammern
-    moveLink.textContent = `${moveNumber}${dots} ${notation}`; // z.B. "14. Qxd8" statt "[14. Qxd8]"
-    
-
+    // Originaltext als Link-Text verwenden
+    const originalText = processedText.substring(match.index, match.index + match.length);
+    moveLink.textContent = originalText;
     
     // Daten zum Zug speichern für Event-Handler
-    moveLink.dataset.moveNumber = moveNumber;
-    moveLink.dataset.isWhite = dots === '.' ? 'true' : 'false';
-    moveLink.dataset.notation = notation.trim();
+    moveLink.dataset.moveNumber = match.moveNumber;
+    moveLink.dataset.isWhite = match.isWhite ? 'true' : 'false';
+    moveLink.dataset.notation = match.notation;
     
     // Verhindere Standard-Link-Verhalten
     moveLink.addEventListener('click', (e) => {
       e.preventDefault();
-      navigateToMove(moveLink.dataset.moveNumber, moveLink.dataset.isWhite === 'true', moveLink.dataset.notation);
+      navigateToMove(match.moveNumber, match.isWhite, match.notation);
     });
     
     container.appendChild(moveLink);
     
-    lastIndex = match.index + match[0].length;
+    // Aktualisiere lastIndex
+    lastIndex = match.index + match.length;
   }
   
   // Rest des Textes hinzufügen
-  if (lastIndex < text.length) {
-    const textNode = document.createTextNode(text.substring(lastIndex));
-    container.appendChild(textNode);
+  if (lastIndex < processedText.length) {
+    container.appendChild(document.createTextNode(processedText.substring(lastIndex)));
   }
   
   return container;
