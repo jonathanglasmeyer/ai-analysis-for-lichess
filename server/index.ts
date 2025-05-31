@@ -5,6 +5,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
+import { RateLimiter } from './rate-limiter';
 
 // Types
 interface AnalyzeRequest {
@@ -246,6 +247,19 @@ const app = new Hono();
 // Initialisiere den Cache-Ordner beim Serverstart
 initializeCache();
 
+// Rate-Limiter für verschiedene Endpunkte
+const analyzeLimiter = new RateLimiter({
+  windowMs: 60 * 60 * 1000, // 1 Stunde
+  maxRequests: 30,          // 30 Anfragen pro Stunde
+  message: 'Rate limit exceeded: 30 requests per hour allowed for analysis'
+});
+
+const cacheLimiter = new RateLimiter({
+  windowMs: 60 * 1000,      // 1 Minute
+  maxRequests: 10,          // 10 Anfragen pro Minute
+  message: 'Rate limit exceeded: 10 requests per minute allowed for cache checking'
+});
+
 // CORS middleware
 app.use('*', cors({
   origin: (origin) => {
@@ -277,7 +291,7 @@ app.get('/', (c) => {
 });
 
 // Cache-Check Endpoint
-app.post('/check-cache', async (c) => {
+app.post('/check-cache', cacheLimiter.middleware(), async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
     console.log('[LOCALE] Cache check received locale:', body.locale);
@@ -334,7 +348,7 @@ app.post('/check-cache', async (c) => {
 });
 
 // Analyze endpoint
-app.post('/analyze', async (c) => {
+app.post('/analyze', analyzeLimiter.middleware(), async (c) => {
   try {
     const body = await c.req.json<AnalyzeRequest>();
     const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';
