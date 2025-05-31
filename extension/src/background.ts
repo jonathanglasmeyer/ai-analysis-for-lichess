@@ -9,7 +9,7 @@
 const IS_PRODUCTION = true; // Setze auf false für lokale Entwicklung
 
 // Hetzner-Server-Domain hier einsetzen (ohne Protokoll)
-const HETZNER_DOMAIN = 'dein-server.example.com';
+const HETZNER_DOMAIN = 'chess-analysis-api.quietloop.dev';
 
 const API_BASE = IS_PRODUCTION
   ? `https://${HETZNER_DOMAIN}`

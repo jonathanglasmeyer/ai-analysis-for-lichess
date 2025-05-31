@@ -15,10 +15,10 @@ echo -e "${YELLOW}Setting up Nginx and SSL for $DOMAIN...${NC}"
 
 # Kopiere nginx.conf zum Server
 echo -e "${YELLOW}Copying nginx configuration to server...${NC}"
-scp nginx.conf $SERVER:/tmp/ai-analysis-for-lichess.conf
+scp  nginx.conf $SERVER:/tmp/ai-analysis-for-lichess.conf
 
 # Installiere und konfiguriere Nginx und Certbot
-ssh $SERVER "
+ssh  $SERVER "
   # Installiere Nginx und Certbot, falls nicht vorhanden
   if ! command -v nginx &> /dev/null; then
     echo 'Installing Nginx...'

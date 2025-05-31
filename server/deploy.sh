@@ -39,11 +39,19 @@ echo -e "${YELLOW}Installing dependencies and setting up systemd service...${NC}
 ssh $SERVER "
   cd $REMOTE_DIR
   
+  # Installiere benötigte Abhängigkeiten
+  if ! command -v unzip &> /dev/null; then
+    echo 'Installing unzip...'
+    sudo apt-get update
+    sudo apt-get install -y unzip
+  fi
+
   # Installiere bun, falls nicht vorhanden
   if ! command -v bun &> /dev/null; then
     echo 'Installing bun...'
     curl -fsSL https://bun.sh/install | bash
     source ~/.bashrc
+    export PATH="$HOME/.bun/bin:$PATH"
   fi
   
   # Installiere Abhängigkeiten
@@ -59,9 +67,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=\$USER
+User=root
 WorkingDirectory=$REMOTE_DIR
-ExecStart=/home/\$USER/.bun/bin/bun run start
+ExecStart=/root/.bun/bin/bun run start
 Restart=on-failure
 Environment=NODE_ENV=production
 
