@@ -4,12 +4,15 @@
 
 // API Endpoints - Konfigurierbar für verschiedene Umgebungen
 // In einer Chrome Extension müssen wir einen anderen Ansatz verwenden, da process.env nicht verfügbar ist
-// Für die Produktion: Verwende die render.com URL
+// Für die Produktion: Verwende den Hetzner-Server
 // Für die Entwicklung: Verwende localhost
 const IS_PRODUCTION = true; // Setze auf false für lokale Entwicklung
 
+// Hetzner-Server-Domain hier einsetzen (ohne Protokoll)
+const HETZNER_DOMAIN = 'dein-server.example.com';
+
 const API_BASE = IS_PRODUCTION
-  ? 'https://ai-analysis-for-lichess-api.onrender.com'
+  ? `https://${HETZNER_DOMAIN}`
   : 'http://localhost:3001';
 
 const CACHE_CHECK_ENDPOINT = `${API_BASE}/check-cache`;
