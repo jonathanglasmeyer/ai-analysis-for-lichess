@@ -292,7 +292,7 @@ app.get('/', (c) => {
 });
 
 // Cache-Check Endpoint
-app.post('/check-cache', apiKeyAuth(), cacheLimiter.middleware(), async (c) => {
+app.post('/check-cache', apiKeyAuth(), async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
     console.log('[LOCALE] Cache check received locale:', body.locale);
