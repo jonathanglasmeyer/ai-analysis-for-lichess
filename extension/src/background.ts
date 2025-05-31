@@ -18,6 +18,9 @@ const API_BASE = IS_PRODUCTION
 const CACHE_CHECK_ENDPOINT = `${API_BASE}/check-cache`;
 const ANALYZE_ENDPOINT = `${API_BASE}/analyze`;
 
+// API-Key für die Authentifizierung
+const API_KEY = 'chess-gpt-extension-key-2022';
+
 // Message handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background script received message:', message);
@@ -149,6 +152,7 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
         },
         body: JSON.stringify({ 
           pgn: normalizedPgn,
@@ -233,6 +237,7 @@ async function performAnalysis(pgn: string, locale?: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
         },
         body: JSON.stringify({ pgn, locale }),
         signal: controller.signal

@@ -6,6 +6,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
+import { apiKeyAuth } from './auth-middleware';
 
 // Types
 interface AnalyzeRequest {
@@ -291,7 +292,7 @@ app.get('/', (c) => {
 });
 
 // Cache-Check Endpoint
-app.post('/check-cache', cacheLimiter.middleware(), async (c) => {
+app.post('/check-cache', apiKeyAuth(), cacheLimiter.middleware(), async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
     console.log('[LOCALE] Cache check received locale:', body.locale);
@@ -348,7 +349,7 @@ app.post('/check-cache', cacheLimiter.middleware(), async (c) => {
 });
 
 // Analyze endpoint
-app.post('/analyze', analyzeLimiter.middleware(), async (c) => {
+app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
   try {
     const body = await c.req.json<AnalyzeRequest>();
     const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';

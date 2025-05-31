@@ -31,11 +31,13 @@ The server will start on port 3001 by default (or the port specified in your .en
 ### Check Cache
 - **POST /check-cache**
 - Body: `{ pgn: "1. e4 e5 2. Nf3 Nc6 ...", locale: "en" }`
+- Headers: `Authorization: Bearer YOUR_API_KEY`
 - Returns: `{ exists: true|false }`
 
 ### Analyze Chess Game
 - **POST /analyze**
 - Body: `{ pgn: "1. e4 e5 2. Nf3 Nc6 ...", locale: "en" }`
+- Headers: `Authorization: Bearer YOUR_API_KEY`
 - Returns: `{ ok: true, analysis: "Analysis of the chess game" }`
 
 ## Deployment on Hetzner Server
@@ -57,7 +59,11 @@ This project includes scripts for easy deployment to a Hetzner server.
    ```bash
    ssh hetzner "nano /opt/ai-analysis-for-lichess/.env"
    ```
-5. Restart the service:
+5. Set up API key authentication:
+   ```bash
+   ./setup-api-key.sh
+   ```
+6. Restart the service:
    ```bash
    ssh hetzner "sudo systemctl restart ai-analysis-for-lichess"
    ```
@@ -133,11 +139,18 @@ ssh hetzner "sudo certbot renew --dry-run"
 
 - `PORT`: Port for the server (default: 3001)
 - `ANTHROPIC_API_KEY`: Your Anthropic API key for AI analysis
+- `CHESS_GPT_API_KEY`: API key for authenticating requests from the extension
 
 ## Troubleshooting
 
 ### API Key Issues
 If you see authentication errors in the logs, check that your Anthropic API key is correctly set in the `.env` file on the server.
+
+### Authentication Issues
+If you see 401 Unauthorized errors:
+1. Verify that the API key in the extension (`background.ts`) matches the one on the server
+2. Check that the Authorization header is correctly formatted as `Bearer YOUR_API_KEY`
+3. Run `setup-api-key.sh` again to reset the API key on the server
 
 ### Connection Issues
 If the extension cannot connect to the server, verify:
