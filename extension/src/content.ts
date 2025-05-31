@@ -259,17 +259,8 @@ async function addAiAnalysisTab(): Promise<void> {
       });
     }, 1000);
     
-    // Create analyze button
-    const analyzeButton = createAnalyzeButton();
-    
-    // Add click event for analyze button
-    analyzeButton.addEventListener('click', () => {
-      console.log('[TRACE] Analyze button clicked');
-      startAnalysis(aiContent);
-    });
-    
-    // Add the button to the content
-    aiContent.appendChild(analyzeButton);
+    // Wir brauchen keinen Analyse-Button mehr, da die Analyse automatisch gestartet wird
+    // wenn der Tab angeklickt wird
     
     // Set up tab event listeners
     setupTabEventListeners(mchatElement, allTabs, aiTab as HTMLElement, aiContent);
