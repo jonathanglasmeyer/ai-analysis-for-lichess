@@ -45,25 +45,25 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
   if (response?.originalResponse?.analysis) {
     normalized.summary = response.originalResponse.analysis.summary || '';
     normalized.moments = response.originalResponse.analysis.moments || [];
-    console.log('Normalized from originalResponse.analysis');
+    console.log('Normalized from originalResponse.analysis. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
   }
   // Case 2: Cache hit with direct structure
   else if (response?.summary) {
     normalized.summary = response.summary || '';
     normalized.moments = response.moments || [];
-    console.log('Normalized from direct response');
+    console.log('Normalized from direct response. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
   }
   // Case 3: Fresh analysis with data structure
   else if (response?.data) {
     normalized.summary = response.data.summary || '';
     normalized.moments = response.data.moments || [];
-    console.log('Normalized from response.data');
+    console.log('Normalized from response.data. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
   }
   // Case 4: Direct analysis object
   else if (response?.analysis) {
     normalized.summary = response.analysis.summary || '';
     normalized.moments = response.analysis.moments || [];
-    console.log('Normalized from response.analysis');
+    console.log('Normalized from response.analysis. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
   }
   
   // If the summary contains markdown code blocks, parse them
@@ -81,7 +81,7 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
         // Also take moments if available
         if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
           normalized.moments = jsonObject.moments;
-          console.log('Parsed moments from JSON code block');
+          console.log('Parsed moments from JSON code block. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
         }
       }
     } catch (e) {
@@ -219,103 +219,171 @@ function convertMovesToLinks(text: string): HTMLDivElement {
 }
 
 /**
- * Navigiert zu einem bestimmten Zug in der Lichess-Oberfläche
+ * Navigates to a specific move in the Lichess UI.
  */
 function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notation: string | undefined): void {
   console.log(`Navigating to move: ${moveNumber}${isWhite ? '.' : '...'} ${notation}`);
   
-  if (!moveNumber) return;
-  if (!notation) return;
+  if (!moveNumber || !notation) return;
   
-  // Konvertiere moveNumber zu Integer
   const moveNum = parseInt(moveNumber, 10);
   if (isNaN(moveNum)) return;
   
-  // Berechne die Halbzugnummer (ply)
-  // Jeder vollständige Zug besteht aus zwei Halbzügen (weiß und schwarz)
-  // Weiße Züge sind ungerade, schwarze Züge sind gerade
-  const ply = (moveNum - 1) * 2 + (isWhite ? 1 : 2);
-  
   try {
-    // Hilfsfunktion für DOM-Navigation
     const findAndClickMove = () => {
-      // Finde das richtige Element in der Zugliste
       const moveContainer = document.querySelector('.tview2');
       if (!moveContainer) {
-        console.error('Move container not found');
+        console.error('Move container .tview2 not found for navigation.');
         return false;
       }
       
-      const moveText = `${moveNumber}${isWhite ? '.' : '...'} ${notation}`;
       let targetMove: Element | null = null;
-      
-      // ROBUSTE SUCHE: Finde das passende Move-Element anhand von Zugnummer und SAN
       const moveElements = moveContainer.querySelectorAll('move');
-      console.group('DEBUG: Move DOM-Scan');
-      console.log('Gesucht:', { moveNumber, notation });
+
       for (const moveEl of Array.from(moveElements)) {
-        const san = moveEl.querySelector('san');
-        // Rückwärts laufen bis zum nächsten index-Element (überspringt leere/intermediate Elemente)
-        let prev = moveEl.previousElementSibling;
-        let foundIndex = null;
-        while (prev) {
-          if (prev.tagName.toLowerCase() === 'index') {
-            foundIndex = prev.textContent?.trim();
+        const sanNode = moveEl.querySelector('san');
+        const currentNotation = sanNode?.textContent?.trim() || moveEl.textContent?.trim();
+        if (currentNotation !== notation) continue;
+
+        // Find the preceding 'index' element to get the move number
+        let prevSibling = moveEl.previousElementSibling;
+        let currentMoveListNumber = '';
+        let isCurrentMoveWhite = false;
+
+        while (prevSibling) {
+          if (prevSibling.tagName.toLowerCase() === 'index') {
+            currentMoveListNumber = (prevSibling.textContent?.match(/^(\d+)/) || [])[1] || '';
+            // Determine color: if moveEl is the first 'move' after 'index', it's white's move.
+            // If it's the second 'move' (after white's move, possibly skipping an interrupt/empty), it's black's.
+            let siblingAfterIndex = prevSibling.nextElementSibling;
+            let moveCountAfterIndex = 0;
+            while(siblingAfterIndex && siblingAfterIndex !== moveEl && moveCountAfterIndex < 3) {
+              if (siblingAfterIndex.tagName.toLowerCase() === 'move' && !siblingAfterIndex.classList.contains('empty')) {
+                moveCountAfterIndex++;
+              }
+              siblingAfterIndex = siblingAfterIndex.nextElementSibling;
+            }
+            if (siblingAfterIndex === moveEl && moveCountAfterIndex === 0) isCurrentMoveWhite = true;
+            if (siblingAfterIndex === moveEl && moveCountAfterIndex === 1) isCurrentMoveWhite = false;
             break;
           }
-          prev = prev.previousElementSibling;
+          prevSibling = prevSibling.previousElementSibling;
         }
-        console.log('DOM:', { foundIndex, san: san?.textContent?.trim() });
-        if (!san || san.textContent?.trim() !== notation) continue;
-        if (foundIndex === moveNumber) {
+
+        if (currentMoveListNumber === moveNumber && isCurrentMoveWhite === isWhite) {
           targetMove = moveEl;
-          console.log('TREFFER:', { foundIndex, san: san.textContent?.trim() });
           break;
         }
       }
       
-      // Klick auf den Zug auslösen, wenn gefunden
       if (targetMove) {
-        console.log('Found target move:', targetMove);
-        
-        // Zum Element scrollen
+        console.log('Found target move for navigation:', targetMove);
         targetMove.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // 1. Markiere alle aktiven Züge als inaktiv
         const activeMoves = moveContainer.querySelectorAll('move.active');
         activeMoves.forEach(m => m.classList.remove('active'));
-        
-        // 2. Markiere den ausgewählten Zug als aktiv
         targetMove.classList.add('active');
         
-        // 3. Simuliere einen Mausklick auf den Zug
         setTimeout(() => {
-          const mouseEvent = new MouseEvent('mousedown', {
-            bubbles: true,
-            cancelable: true,
-            view: window
-          });
+          const mouseEvent = new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window });
           targetMove!.dispatchEvent(mouseEvent);
         }, 100);
-        
         return true;
       }
-      
-      console.warn(`Move not found: ${moveNumber}${isWhite ? '.' : '...'} ${notation}`);
+      console.warn(`Move not found for navigation: ${moveNumber}${isWhite ? '.' : '...'} ${notation}`);
       return false;
     };
     
-    // Versuche die DOM-Navigation
     if (!findAndClickMove()) {
-      // Wenn es nicht sofort klappt, warte kurz und versuche es noch einmal
-      // (manchmal braucht Lichess einen Moment, um die DOM-Struktur zu aktualisieren)
       setTimeout(() => {
         findAndClickMove();
-      }, 300);
+      }, 300); // Retry after a short delay if not found immediately
     }
   } catch (error) {
     console.error('Error navigating to move:', error);
   }
+}
+
+
+function preCorrectAndRebuildMomentsByPly(
+  originalApiMoments: AnalysisMoment[],
+  plyByDomMoveEl: Map<Element, number>
+): Record<number, AnalysisMoment> {
+  const correctedMomentsMap: Record<number, AnalysisMoment> = {};
+  const assignedApiMoments = new Set<AnalysisMoment>(); // Verfolgt, welche API-Momente bereits zugeordnet wurden
+
+  console.log('[MomentPreCorrection] Starting pre-correction. Original API moments:', originalApiMoments.length, 'DOM moves mapped:', plyByDomMoveEl.size);
+
+  // Pass 1: Exakter Match von API-Ply und DOM-Ply, sowie SAN-Match
+  originalApiMoments.forEach(apiMoment => {
+    if (!apiMoment.move || assignedApiMoments.has(apiMoment)) return; // Moment ohne Zug oder bereits zugewiesen
+    const apiSan = (apiMoment.move).replace(/[\s\?\.\!]+/g, '');
+
+    for (const [moveEl, domPly] of plyByDomMoveEl.entries()) {
+      const domSan = (moveEl.querySelector('san')?.textContent || moveEl.textContent || '').replace(/[\s\?\.\!]+/g, '');
+      
+      const isApiMomentWhite = apiMoment.color === 'white';
+        const isDomPlyWhite = domPly % 2 === 1;
+        if (apiMoment.ply === domPly && domSan === apiSan && isApiMomentWhite === isDomPlyWhite) {
+        if (!correctedMomentsMap[domPly]) { // Nur wenn dieser domPly noch nicht belegt ist
+          correctedMomentsMap[domPly] = { ...apiMoment, ply: domPly }; // Stelle sicher, dass der Ply-Wert der des DOM ist
+          assignedApiMoments.add(apiMoment);
+          console.log(`[MomentPreCorrection] Pass 1: Exact match for SAN '${apiSan}' at ply ${domPly}.`);
+        } else {
+          if (correctedMomentsMap[domPly].move?.replace(/[\s\?\.\!]+/g, '') !== apiSan || correctedMomentsMap[domPly].comment !== apiMoment.comment) {
+             console.log(`[MomentPreCorrection] Pass 1: Slot for ply ${domPly} (SAN '${apiSan}') already taken by moment for SAN '${correctedMomentsMap[domPly].move}'. Skipping.`);
+          }
+        }
+        break; 
+      }
+    }
+  });
+
+  // Pass 2: SAN-Match, aber API-Ply ist um +/-1 daneben (Korrektur)
+  originalApiMoments.forEach(apiMoment => {
+    if (assignedApiMoments.has(apiMoment) || !apiMoment.move) return; 
+    const apiSan = (apiMoment.move).replace(/[\s\?\.\!]+/g, '');
+
+    for (const [moveEl, domPly] of plyByDomMoveEl.entries()) {
+      const domSan = (moveEl.querySelector('san')?.textContent || moveEl.textContent || '').replace(/[\s\?\.\!]+/g, '');
+
+      const isApiMomentWhitePass2 = apiMoment.color === 'white';
+        const isDomPlyWhitePass2 = domPly % 2 === 1;
+        if (domSan === apiSan && isApiMomentWhitePass2 === isDomPlyWhitePass2) { 
+          const plyDifference = Math.abs(apiMoment.ply - domPly);
+          if (plyDifference <= 1) { 
+            if (!correctedMomentsMap[domPly]) { 
+            console.log(`[MomentPreCorrection] Pass 2: Adjusting moment for SAN '${apiSan}' from API ply ${apiMoment.ply} to DOM ply ${domPly} (diff: ${plyDifference}).`);
+            correctedMomentsMap[domPly] = { ...apiMoment, ply: domPly }; 
+            assignedApiMoments.add(apiMoment);
+          } else {
+            if (correctedMomentsMap[domPly].move?.replace(/[\s\?\.\!]+/g, '') !== apiSan || correctedMomentsMap[domPly].comment !== apiMoment.comment) {
+                 console.log(`[MomentPreCorrection] Pass 2: Slot for ply ${domPly} (SAN '${apiSan}') already taken by moment for SAN '${correctedMomentsMap[domPly].move}'. Skipping adjustment from API ply ${apiMoment.ply}.`);
+            }
+          }
+          break; 
+        }
+      }
+    }
+  });
+  
+  // Pass 3: For any unassigned moments, try to place them if their original API ply slot is free
+  originalApiMoments.forEach(apiMoment => {
+    if (assignedApiMoments.has(apiMoment)) return;
+
+    if (!correctedMomentsMap[apiMoment.ply]) {
+        console.log(`[MomentPreCorrection] Pass 3: Placing unassigned moment for SAN '${apiMoment.move || 'N/A'}' at its original API ply ${apiMoment.ply} as slot is free.`);
+        correctedMomentsMap[apiMoment.ply] = { ...apiMoment }; 
+        assignedApiMoments.add(apiMoment);
+    } else {
+      if (correctedMomentsMap[apiMoment.ply].move?.replace(/[\s\?\.\!]+/g, '') !== (apiMoment.move || '').replace(/[\s\?\.\!]+/g, '') || correctedMomentsMap[apiMoment.ply].comment !== apiMoment.comment) {
+        console.log(`[MomentPreCorrection] Pass 3: Slot for original API ply ${apiMoment.ply} (SAN '${apiMoment.move || 'N/A'}') already taken by different moment. Moment could not be placed.`);
+      }
+    }
+  });
+
+  console.log(`[MomentPreCorrection] Finished pre-correction. ${Object.keys(correctedMomentsMap).length} moments in corrected map.`);
+  return correctedMomentsMap;
 }
 
 /**
@@ -347,48 +415,61 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
   }
   console.log('Moments:', moments);
   
-  // Cleanup: Entferne alle von uns erstellten Empty-Moves und AI-Kommentare aus vorherigen Durchläufen
-  const existingAIComments = document.querySelectorAll('.ai-comment');
-  existingAIComments.forEach(comment => {
-    const interrupt = comment.closest('interrupt');
-    // Wenn das interrupt nur unseren AI-Kommentar enthält, entferne das ganze interrupt
-    if (interrupt && interrupt.children.length === 1 && interrupt.children[0].classList.contains('ai-comment')) {
-      // Prüfe, ob es ein von uns erstelltes Empty-Move vor oder nach dem interrupt gibt
-      const prevEmpty = interrupt.previousElementSibling;
-      const nextEmpty = interrupt.nextElementSibling;
-      
-      if (prevEmpty && prevEmpty.tagName.toLowerCase() === 'move' && prevEmpty.classList.contains('empty') && prevEmpty.hasAttribute('data-ai-empty-id')) {
-        console.log(`🗑️ Removing AI-created empty move (ID: ${prevEmpty.getAttribute('data-ai-empty-id')}) before interrupt`);
-        prevEmpty.remove();
+  // Simpler, more aggressive cleanup for all AI-generated elements
+  console.log('🧹 Starting AI elements cleanup...');
+  document.querySelectorAll('[data-ai-empty-id]').forEach(el => {
+    console.log(`🗑️ Removing AI-created empty move (ID: ${el.getAttribute('data-ai-empty-id')})`);
+    el.remove();
+  });
+  document.querySelectorAll('index[data-ai-created-index-for-ply]').forEach(el => {
+    console.log(`🗑️ Removing AI-created index (for ply: ${el.getAttribute('data-ai-created-index-for-ply')})`);
+    el.remove();
+  });
+
+  const aiCommentsToRemove = Array.from(document.querySelectorAll('.ai-comment'));
+  aiCommentsToRemove.forEach(aiComment => {
+    console.log('🗑️ Removing AI comment');
+    const interrupt = aiComment.closest('interrupt');
+    aiComment.remove(); // Remove AI comment itself
+    if (interrupt && interrupt.children.length === 0 && !interrupt.textContent?.trim()) {
+      // Check if interrupt is still in DOM before removing, as it might have been removed if aiComment was only child
+      if (document.body.contains(interrupt)) {
+          console.log('🗑️ Removing now-empty interrupt (due to AI comment removal)');
+          interrupt.remove();
       }
-      if (nextEmpty && nextEmpty.tagName.toLowerCase() === 'move' && nextEmpty.classList.contains('empty') && nextEmpty.hasAttribute('data-ai-empty-id')) {
-        console.log(`🗑️ Removing AI-created empty move (ID: ${nextEmpty.getAttribute('data-ai-empty-id')}) after interrupt`);
-        nextEmpty.remove();
-      }
-      
-      console.log('🗑️ Removing AI-only interrupt');
-      interrupt.remove();
-    } else if (interrupt) {
-      // Nur den AI-Kommentar entfernen, interrupt behalten
-      console.log('🗑️ Removing AI comment from shared interrupt');
-      comment.remove();
     }
   });
+
+  // Second pass for any interrupts that might have become completely empty
+  document.querySelectorAll('interrupt').forEach(interrupt => {
+    if (interrupt.children.length === 0 && !interrupt.textContent?.trim()) {
+       if (document.body.contains(interrupt)) { 
+          console.log('🗑️ Removing empty interrupt (second pass)');
+          interrupt.remove();
+       }
+    }
+  });
+  console.log('🧹 AI elements cleanup finished.');
   
   // Inject CSS for AI comments
   injectAICommentStyles();
   
-  // Collect all moves in a ply-based mapping
-  const momentsByPly: Record<number, AnalysisMoment> = {};
-  moments.forEach((moment: AnalysisMoment) => {
-    momentsByPly[moment.ply] = moment;
-  });
+  // Map to store ply for each move element, built before pre-correction
+  const plyByMoveEl = new Map<Element, number>();
+  // ... (logic to populate plyByMoveEl needs to be here, before calling preCorrectAndRebuildMomentsByPly)
+  // This part of the logic was complex and involved iterating moveElements and indexElements.
+  // For now, I'll assume plyByMoveEl is populated correctly by the existing logic that follows shortly.
+  // The call to preCorrectAndRebuildMomentsByPly will be moved after plyByMoveEl is populated.
+
+  // Placeholder for where plyByMoveEl is fully populated.
+  // The actual pre-correction call will be moved after the loop that builds plyByMoveEl.
+
   
   // Find all move entries in the move list
   setTimeout(() => {
     // Wait briefly as Lichess might update the move list dynamically
     console.log('Looking for move elements and their PLY values');
-    console.log('Moments by ply:', Object.keys(momentsByPly).map(Number));
+    // console.log('Moments by ply:', Object.keys(momentsByPly).map(Number)); // momentsByPly is replaced
     
     // Neue Strategie: Folge der DOM-Struktur und ermittle PLY-Werte basierend auf den index-Elementen
     const moveElements = Array.from(moveListContainer.querySelectorAll('move')).filter(moveEl => {
@@ -507,10 +588,14 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       }
     }
     
-    const processMove = (moveEl: Element, ply: number) => {
+    // JETZT, da plyByMoveEl vollständig ist, können wir die Momente vorkorrigieren:
+    const finalCorrectedMomentsByPly = preCorrectAndRebuildMomentsByPly(moments, plyByMoveEl);
+    console.log('[MomentPreCorrection] Final corrected moments map:', JSON.parse(JSON.stringify(finalCorrectedMomentsByPly)));
+
+    const processMove = (moveEl: Element, ply: number, currentCorrectedMomentsByPly: Record<number, AnalysisMoment>) => {
       // Toleranz für ungenaue Ply-Werte einbauen
       // Auch bei leichten Abweichungen (±1) sollen die Kommentare angezeigt werden
-      let moment = momentsByPly[ply];
+      let moment = currentCorrectedMomentsByPly[ply];
       
       // Wenn kein Moment für den exakten Ply gefunden wurde, versuche benachbarte Plys
       if (!moment) {
@@ -521,14 +606,15 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         // Benachbarte Plys prüfen (-1, +1)
         for (const offset of [-1, 1]) {
           const nearbyPly = ply + offset;
-          const nearbyMoment = momentsByPly[nearbyPly];
+          const nearbyMoment = currentCorrectedMomentsByPly[nearbyPly];
           
           if (nearbyMoment && nearbyMoment.move) {
             const trimmedMomentMove = nearbyMoment.move.replace(/[\s\?\.\!]+/g, '');
             
-            // Wenn der Zugtext übereinstimmt oder zumindest sehr ähnlich ist
-            if (trimmedMoveText.includes(trimmedMomentMove) || trimmedMomentMove.includes(trimmedMoveText)) {
+            // Wenn der Zugtext exakt übereinstimmt (nach Bereinigung)
+            if (trimmedMoveText === trimmedMomentMove) {
               moment = nearbyMoment;
+              console.log(`[FuzzyMatchDebug] Fuzzy matched for moveEl "${trimmedMoveText}" (ply ${ply}) with moment for "${trimmedMomentMove}" from nearbyPly ${nearbyPly}`);
               break;
             }
           }
@@ -575,6 +661,7 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       // If no existing interrupt found, create one
       if (!interruptElement) {
         interruptElement = document.createElement('interrupt');
+        // Interrupts (containing comments) are always placed AFTER the move element in the DOM
         moveEl.after(interruptElement);
       }
       
@@ -600,8 +687,9 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       }
     };
 
+    // Iteriere über die `plyByMoveEl` Map, um die Reihenfolge der DOM-Elemente beizubehalten
     plyByMoveEl.forEach((ply, moveEl) => {
-      processMove(moveEl, ply);
+      processMove(moveEl, ply, finalCorrectedMomentsByPly);
     });
 
     // Nach allen Moment-Verarbeitungen: Erstelle Empty-Moves für die Darstellung
@@ -613,67 +701,163 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
     // encoded 'p' attributes that are not searchable via standard selectors.
     
     // Verwende die bereits erstellte plyByMoveEl Map anstatt DOM-Queries
-    for (const [plyStr, moment] of Object.entries(momentsByPly)) {
-      const ply = parseInt(plyStr);
-      
-      // Suche das Move-Element in der plyByMoveEl Map
-      let moveEl: HTMLElement | null = null;
-      for (const [element, elementPly] of plyByMoveEl.entries()) {
-        if (elementPly === ply) {
-          moveEl = element as HTMLElement;
-          break;
-        }
-      }
-      
-      if (!moveEl) continue;
+    // Iterate over all moves found on the main line (via plyByMoveEl)
+    // to decide where empty moves are structurally needed.
+    for (const [moveElementFromMap, plyFromMap] of plyByMoveEl.entries()) {
+      const moveEl = moveElementFromMap as HTMLElement; // Current move being considered
+      const ply = plyFromMap; // Ply of the current moveEl
 
       const isWhiteMove = ply % 2 === 1;
-      
+
       if (isWhiteMove) {
-        // White move: Check if the following black move has a moment/interrupt
-        // If so, create an empty move after the white move for proper display spacing
-        const blackMovePly = ply + 1;
-        const blackMoveHasMoment = !!momentsByPly[blackMovePly];
-        
-        let nextBlackMove = moveEl.nextElementSibling;
-        while (nextBlackMove && nextBlackMove.tagName.toLowerCase() !== 'move') {
-          nextBlackMove = nextBlackMove.nextElementSibling;
+        const whitePly = ply;
+        const blackPly = whitePly + 1;
+
+        // Helper to determine if a move has any interrupt (AI or native)
+        interface InterruptCheckResult {
+          hasInterrupt: boolean;
+          // The DOM element that IS the interrupt (the <interrupt> tag) or null if no interrupt structure.
+          interruptDOMNode: HTMLElement | null;
         }
-        const blackMoveHasNativeInterrupt = !!(nextBlackMove && nextBlackMove.nextElementSibling?.tagName.toLowerCase() === 'interrupt');
-        
-        if (blackMoveHasMoment || blackMoveHasNativeInterrupt) {
-          // Check for existing empty move to prevent duplicates (respects both native Lichess and AI-created)
-          const nextElement = moveEl.nextElementSibling;
-          const existingEmptyMove = nextElement && nextElement.tagName.toLowerCase() === 'move' && nextElement.classList.contains('empty');
-          
-          if (!existingEmptyMove) {
-            const emptyMove = document.createElement('move');
-            emptyMove.className = 'empty';
-            emptyMove.textContent = '...';
-            const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
-            moveEl.after(emptyMove);
-          } else {
+        const checkInterrupt = (currentMoveEl: HTMLElement, currentPly: number): InterruptCheckResult => {
+          const hasAIMoment = !!finalCorrectedMomentsByPly[currentPly];
+          let actualInterruptElement: HTMLElement | null = null;
+          let nextPotentialElement = currentMoveEl.nextElementSibling;
+
+          // Skip over any Lichess-generated empty moves (they don't have 'data-ai-empty-id')
+          // to find our interrupt or a native interrupt.
+          while (nextPotentialElement && 
+                 nextPotentialElement.tagName.toLowerCase() === 'move' && 
+                 nextPotentialElement.classList.contains('empty') && 
+                 !nextPotentialElement.hasAttribute('data-ai-empty-id')) {
+            nextPotentialElement = nextPotentialElement.nextElementSibling;
+          }
+
+          if (nextPotentialElement?.tagName.toLowerCase() === 'interrupt') {
+            actualInterruptElement = nextPotentialElement as HTMLElement;
+          }
+
+          const isNativeInterruptContent = actualInterruptElement &&
+                                       (actualInterruptElement.querySelector('comment:not(.ai-comment)') ||
+                                        actualInterruptElement.querySelector('lines'));
+
+          if (hasAIMoment || isNativeInterruptContent) {
+            return {
+              hasInterrupt: true,
+              // actualInterruptElement is the <interrupt> tag if found after skipping Lichess empty moves
+              interruptDOMNode: actualInterruptElement 
+            };
+          }
+          return { hasInterrupt: false, interruptDOMNode: null };
+        };
+
+        const whiteInterruptDetailsLocal = checkInterrupt(moveEl, whitePly);
+        const whiteHasInterrupt = whiteInterruptDetailsLocal.hasInterrupt;
+
+        let blackHasInterrupt = false;
+        let blackMoveElement: HTMLElement | null = null;
+        for (const [bmEl, bmPly] of plyByMoveEl.entries()) {
+          if (bmPly === blackPly) {
+            blackMoveElement = bmEl as HTMLElement;
+            break;
           }
         }
-      } else {
-        // Black move: Check if the preceding white move has a moment/interrupt  
-        // If so, create an empty move before the black move for proper display spacing
-        const whiteMovePly = ply - 1;
-        const whiteMoveHasMoment = !!momentsByPly[whiteMovePly];
-        
-        const prevElement = moveEl.previousElementSibling;
-        const whiteMoveHasNativeInterrupt = prevElement && prevElement.nextElementSibling?.tagName.toLowerCase() === 'interrupt';
-        
-        if ((whiteMoveHasMoment || whiteMoveHasNativeInterrupt) && 
-            (!prevElement || !(prevElement.tagName.toLowerCase() === 'move' && prevElement.classList.contains('empty')))) {
-          const emptyMove = document.createElement('move');
-          emptyMove.className = 'empty';
-          emptyMove.textContent = '...';
-          const emptyMoveId = `empty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-          emptyMove.setAttribute('data-ai-empty-id', emptyMoveId);
-          moveEl.before(emptyMove);
+        if (blackMoveElement) {
+          blackHasInterrupt = checkInterrupt(blackMoveElement, blackPly).hasInterrupt;
         }
+        
+        console.log(`[EmptyMoveDebug] White Move: ${moveEl.textContent?.trim()} (ply ${whitePly}). White hasInterrupt: ${whiteHasInterrupt}. Black (ply ${blackPly}) hasInterrupt: ${blackHasInterrupt}`);
+
+        // USER RULE: If White has an interrupt AND Black (same full move) does NOT,
+        // insert structure: emptyMove1, newIndexElement, emptyMove2.
+        if (whiteHasInterrupt && !blackHasInterrupt) {
+          let pointOfInsertion = moveEl; // White's move element (ply: whitePly)
+          if (moveEl.nextElementSibling?.tagName.toLowerCase() === 'interrupt') {
+            pointOfInsertion = moveEl.nextElementSibling as HTMLElement; // White's interrupt element
+          }
+
+          // Check if our full structure (empty1-index-empty2) already exists after pointOfInsertion
+          const el1 = pointOfInsertion.nextElementSibling;
+          const el2 = el1?.nextElementSibling;
+          const el3 = el2?.nextElementSibling;
+
+          const alreadyCorrectlyStructured = 
+              el1?.matches('move.empty[data-ai-empty-id]') &&
+              el2?.matches(`index[data-ai-created-index-for-ply="${blackPly}"]`) &&
+              el3?.matches('move.empty[data-ai-empty-id]');
+
+          if (!alreadyCorrectlyStructured) {
+            console.log(`[EmptyMoveDebug] -> Building structure (empty1, newIndex, empty2) for whitePly ${whitePly}, blackPly ${blackPly}. Insertion after: ${pointOfInsertion.tagName} '${pointOfInsertion.textContent?.trim().substring(0,10)}'`);
+            
+            // Create emptyMove1
+            // Determine the actual interrupt element for white, if any.
+            // This element (if it's an <interrupt> tag) should already be in the DOM, typically after moveEl.
+            const whiteInterruptDetails = whiteInterruptDetailsLocal; // Use the already fetched details
+            const actualWhiteInterruptDOMElement = whiteInterruptDetails.interruptDOMNode;
+
+            // Explicit DOM manipulation for the white-interrupt-only case
+            // Order: moveEl -> emptyMove1 -> actualWhiteInterruptDOMElement -> newIndexElement -> emptyMove2
+
+            // 1. Create and insert emptyMove1 after white's move (moveEl)
+            const emptyMove1 = document.createElement('move');
+            emptyMove1.className = 'empty';
+            emptyMove1.textContent = '...';
+            emptyMove1.setAttribute('data-ai-empty-id', `em1-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+            moveEl.after(emptyMove1);
+
+            // 2. Create newIndexElement (for Black's turn, content is just the number)
+            const newIndexElement = document.createElement('index');
+            const blackMoveFullNumber = blackPly / 2;
+            newIndexElement.textContent = `${blackMoveFullNumber}`;
+            newIndexElement.setAttribute('data-ai-created-index-for-ply', blackPly.toString());
+            // Attempt to copy class for styling consistency
+            let precedingIndexSearch = moveEl.previousElementSibling;
+            let foundPrecedingIndexClass = false;
+            while (precedingIndexSearch) {
+                if (precedingIndexSearch.tagName.toLowerCase() === 'index') {
+                    if (precedingIndexSearch.className && precedingIndexSearch.className.startsWith('sbhint')) {
+                        newIndexElement.className = precedingIndexSearch.className.replace(/sbhint\d+/, `sbhint${blackPly}`);
+                        foundPrecedingIndexClass = true;
+                    }
+                    break;
+                }
+                precedingIndexSearch = precedingIndexSearch.previousElementSibling;
+            }
+            if (!foundPrecedingIndexClass) {
+                newIndexElement.className = `sbhint${blackPly}`; // Fallback
+            }
+
+            // 3. Create emptyMove2
+            const emptyMove2 = document.createElement('move');
+            emptyMove2.className = 'empty';
+            emptyMove2.textContent = '...';
+            emptyMove2.setAttribute('data-ai-empty-id', `em2-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+
+            // 4. Position the interrupt and insert other elements
+            if (actualWhiteInterruptDOMElement) {
+                // Order: moveEl -> emptyMove1 -> actualWhiteInterruptDOMElement -> newIndexElement -> emptyMove2
+                emptyMove1.after(actualWhiteInterruptDOMElement); // Move interrupt after emptyMove1
+                actualWhiteInterruptDOMElement.after(newIndexElement); // Insert newIndex after interrupt
+                newIndexElement.after(emptyMove2); // Insert emptyMove2 after newIndexElement
+            } else {
+                // This case implies whiteHasInterrupt was true, but checkInterrupt didn't find the DOM node.
+                // This will lead to the incorrect order: moveEl -> emptyMove1 -> newIndexElement -> emptyMove2 ... (interrupt is somewhere else)
+                console.warn(`[EmptyMoveDebug] CRITICAL: actualWhiteInterruptDOMElement is null but whiteHasInterrupt is true for ply ${whitePly}. Interrupt will be misplaced.`);
+                emptyMove1.after(newIndexElement); // Insert newIndex after emptyMove1
+                newIndexElement.after(emptyMove2); // Insert emptyMove2 after newIndex
+            }
+
+            console.log(`[EmptyMoveDebug] -> Inserted structure: empty1, newIndex, empty2.`);
+          } else {
+            console.log(`[EmptyMoveDebug] -> Full AI structure (empty1, newIndex, empty2) already exists for whitePly ${whitePly}.`);
+          }
+        } else {
+          // Conditions for this specific 3-element structure not met.
+          console.log(`[EmptyMoveDebug] -> Conditions for empty1-newIndex-empty2 structure not met for whitePly ${whitePly}. WhiteHasInterrupt: ${whiteHasInterrupt}, BlackHasInterrupt: ${blackHasInterrupt}`);
+        }
+      } else {
+        // Black move: No empty move creation logic from Black's perspective based on the refined rule.
+        // The console logs previously here for black move's empty decision are removed.
       }
     }
   }, 500);
