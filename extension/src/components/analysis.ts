@@ -81,7 +81,7 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
         // Also take moments if available
         if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
           normalized.moments = jsonObject.moments;
-          console.log('Parsed moments from JSON code block. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
+          
         }
       }
     } catch (e) {
@@ -305,10 +305,24 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
 }
 
 
+// Track corrections for debugging
+interface MomentCorrection {
+  san: string;
+  originalPly: number;
+  newPly: number;
+  diff: number;
+  pass: number;
+}
+
+let momentCorrections: MomentCorrection[] = [];
+
 function preCorrectAndRebuildMomentsByPly(
   originalApiMoments: AnalysisMoment[],
   plyByDomMoveEl: Map<Element, number>
 ): Record<number, AnalysisMoment> {
+  // Reset corrections for this run
+  momentCorrections = [];
+  
   const correctedMomentsMap: Record<number, AnalysisMoment> = {};
   const assignedApiMoments = new Set<AnalysisMoment>(); // Verfolgt, welche API-Momente bereits zugeordnet wurden
 
@@ -329,6 +343,15 @@ function preCorrectAndRebuildMomentsByPly(
           correctedMomentsMap[domPly] = { ...apiMoment, ply: domPly }; // Stelle sicher, dass der Ply-Wert der des DOM ist
           assignedApiMoments.add(apiMoment);
           console.log(`[MomentPreCorrection] Pass 1: Exact match for SAN '${apiSan}' at ply ${domPly}.`);
+          
+          // Track exact matches too (even though they're not corrections)
+          momentCorrections.push({
+            san: apiSan,
+            originalPly: apiMoment.ply,
+            newPly: domPly,
+            diff: 0,
+            pass: 1
+          });
         } else {
           if (correctedMomentsMap[domPly].move?.replace(/[\s\?\.\!]+/g, '') !== apiSan || correctedMomentsMap[domPly].comment !== apiMoment.comment) {
              console.log(`[MomentPreCorrection] Pass 1: Slot for ply ${domPly} (SAN '${apiSan}') already taken by moment for SAN '${correctedMomentsMap[domPly].move}'. Skipping.`);
@@ -356,6 +379,15 @@ function preCorrectAndRebuildMomentsByPly(
             console.log(`[MomentPreCorrection] Pass 2: Adjusting moment for SAN '${apiSan}' from API ply ${apiMoment.ply} to DOM ply ${domPly} (diff: ${plyDifference}).`);
             correctedMomentsMap[domPly] = { ...apiMoment, ply: domPly }; 
             assignedApiMoments.add(apiMoment);
+            
+            // Track the correction
+            momentCorrections.push({
+              san: apiSan,
+              originalPly: apiMoment.ply,
+              newPly: domPly,
+              diff: apiMoment.ply - domPly,
+              pass: 2
+            });
           } else {
             if (correctedMomentsMap[domPly].move?.replace(/[\s\?\.\!]+/g, '') !== apiSan || correctedMomentsMap[domPly].comment !== apiMoment.comment) {
                  console.log(`[MomentPreCorrection] Pass 2: Slot for ply ${domPly} (SAN '${apiSan}') already taken by moment for SAN '${correctedMomentsMap[domPly].move}'. Skipping adjustment from API ply ${apiMoment.ply}.`);
@@ -375,6 +407,15 @@ function preCorrectAndRebuildMomentsByPly(
         console.log(`[MomentPreCorrection] Pass 3: Placing unassigned moment for SAN '${apiMoment.move || 'N/A'}' at its original API ply ${apiMoment.ply} as slot is free.`);
         correctedMomentsMap[apiMoment.ply] = { ...apiMoment }; 
         assignedApiMoments.add(apiMoment);
+        
+        // Track the placement (not really a correction, but for completeness)
+        momentCorrections.push({
+          san: apiMoment.move || 'N/A',
+          originalPly: apiMoment.ply,
+          newPly: apiMoment.ply,
+          diff: 0,
+          pass: 3
+        });
     } else {
       if (correctedMomentsMap[apiMoment.ply].move?.replace(/[\s\?\.\!]+/g, '') !== (apiMoment.move || '').replace(/[\s\?\.\!]+/g, '') || correctedMomentsMap[apiMoment.ply].comment !== apiMoment.comment) {
         console.log(`[MomentPreCorrection] Pass 3: Slot for original API ply ${apiMoment.ply} (SAN '${apiMoment.move || 'N/A'}') already taken by different moment. Moment could not be placed.`);
@@ -995,6 +1036,216 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
     // Statt einfachem Text nun formatierte Links für Zugnotationen verwenden
     const formattedContent = convertMovesToLinks(normalizedData.summary);
     summaryContainer.appendChild(formattedContent);
+    
+    // Add debugging section for moments
+    const debuggingEnabled = localStorage.getItem('chessGptDebugMoments') === 'true';
+    
+    // Add toggle button for debugging
+    const debugToggle = document.createElement('div');
+    debugToggle.style.marginTop = '20px';
+    debugToggle.style.paddingTop = '10px';
+    debugToggle.style.borderTop = '1px solid #ddd';
+    
+    const toggleButton = document.createElement('button');
+    toggleButton.textContent = debuggingEnabled ? 'Hide Debug Info' : 'Show Debug Info';
+    toggleButton.style.fontSize = '12px';
+    toggleButton.style.padding = '4px 8px';
+    toggleButton.style.marginBottom = '10px';
+    toggleButton.style.cursor = 'pointer';
+    toggleButton.onclick = () => {
+      const newState = localStorage.getItem('chessGptDebugMoments') !== 'true';
+      localStorage.setItem('chessGptDebugMoments', newState ? 'true' : 'false');
+      location.reload(); // Reload to apply changes
+    };
+    
+    debugToggle.appendChild(toggleButton);
+    summaryContainer.appendChild(debugToggle);
+    
+    // Display debug information if enabled
+    if (debuggingEnabled && normalizedData.moments) {
+      const debugSection = document.createElement('div');
+      debugSection.style.fontSize = '12px';
+      debugSection.style.fontFamily = 'monospace';
+      debugSection.style.whiteSpace = 'pre-wrap';
+      debugSection.style.backgroundColor = '#f5f5f5';
+      debugSection.style.padding = '10px';
+      debugSection.style.borderRadius = '4px';
+      debugSection.style.marginTop = '10px';
+      debugSection.style.overflowX = 'auto';
+      
+      // Get the corrected moments that were actually used for rendering
+      let correctedMomentsDebug: Record<number, AnalysisMoment> = {};
+      try {
+        // Attempt to get the most recent corrected moments from highlightMovesInMoveList
+        const moveListContainer = document.querySelector('.tview2');
+        if (moveListContainer) {
+          // We need to rebuild the plyByMoveEl map to get accurate debug info
+          const plyByMoveEl = new Map<Element, number>();
+          const moveElements = Array.from(moveListContainer.querySelectorAll('move'));
+          let currentPly = 1;
+          
+          moveElements.forEach(moveEl => {
+            if (!moveEl.classList.contains('empty')) {
+              plyByMoveEl.set(moveEl, currentPly);
+              currentPly++;
+            }
+          });
+          
+          // Get corrected moments using the same function used in highlighting
+          correctedMomentsDebug = preCorrectAndRebuildMomentsByPly(normalizedData.moments, plyByMoveEl);
+        }
+      } catch (error) {
+        console.error('Error getting corrected moments for debug:', error);
+      }
+      
+      // Create header for debug section
+      const debugHeader = document.createElement('h4');
+      debugHeader.textContent = `Analysis Moments (${normalizedData.moments.length})`;
+      debugHeader.style.margin = '0 0 10px 0';
+      debugSection.appendChild(debugHeader);
+      
+      // Create section for corrections
+      const correctionsHeader = document.createElement('h5');
+      correctionsHeader.textContent = `Ply Corrections (${momentCorrections.filter(c => c.diff !== 0).length})`;
+      correctionsHeader.style.margin = '10px 0 5px 0';
+      debugSection.appendChild(correctionsHeader);
+      
+      // Create table for corrections
+      const correctionsTable = document.createElement('table');
+      correctionsTable.style.width = '100%';
+      correctionsTable.style.borderCollapse = 'collapse';
+      correctionsTable.style.fontSize = '11px';
+      correctionsTable.style.marginBottom = '15px';
+      
+      // Create table header for corrections
+      const correctionsThead = document.createElement('thead');
+      correctionsThead.innerHTML = `
+        <tr style="background-color: #e0e0e0;">
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Move</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Original Ply</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">New Ply</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Diff</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Pass</th>
+        </tr>
+      `;
+      correctionsTable.appendChild(correctionsThead);
+      
+      // Create table body for corrections
+      const correctionsTbody = document.createElement('tbody');
+      
+      // Filter to only show actual corrections (where diff is not 0)
+      const actualCorrections = momentCorrections.filter(c => c.diff !== 0);
+      
+      // Sort by original ply
+      actualCorrections.sort((a, b) => a.originalPly - b.originalPly);
+      
+      // Add rows for each correction
+      actualCorrections.forEach((correction, index) => {
+        const row = document.createElement('tr');
+        row.style.backgroundColor = index % 2 === 0 ? '#f9f9f9' : '#ffffff';
+        
+        row.innerHTML = `
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${correction.san}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${correction.originalPly}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${correction.newPly}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd; color: ${correction.diff > 0 ? '#cc0000' : '#0000cc'};">${correction.diff}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${correction.pass}</td>
+        `;
+        
+        correctionsTbody.appendChild(row);
+      });
+      
+      correctionsTable.appendChild(correctionsTbody);
+      debugSection.appendChild(correctionsTable);
+      
+      // Create header for all moments
+      const momentsHeader = document.createElement('h5');
+      momentsHeader.textContent = `All Moments`;
+      momentsHeader.style.margin = '10px 0 5px 0';
+      debugSection.appendChild(momentsHeader);
+      
+      // Create table for moments
+      const momentsTable = document.createElement('table');
+      momentsTable.style.width = '100%';
+      momentsTable.style.borderCollapse = 'collapse';
+      momentsTable.style.fontSize = '11px';
+      
+      // Create table header
+      const thead = document.createElement('thead');
+      thead.innerHTML = `
+        <tr style="background-color: #e0e0e0;">
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Ply</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Color</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Move</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Comment</th>
+          <th style="padding: 4px 6px; text-align: left; border: 1px solid #ccc;">Status</th>
+        </tr>
+      `;
+      momentsTable.appendChild(thead);
+      
+      // Create table body
+      const tbody = document.createElement('tbody');
+      
+      // Sort original moments by ply for better readability
+      const sortedMoments = [...normalizedData.moments].sort((a, b) => a.ply - b.ply);
+      
+      // Add rows for each moment
+      sortedMoments.forEach((moment, index) => {
+        const row = document.createElement('tr');
+        row.style.backgroundColor = index % 2 === 0 ? '#f9f9f9' : '#ffffff';
+        
+        // Find if this moment was placed in corrected moments and where
+        let placedPly = null;
+        let wasPlaced = false;
+        
+        for (const [correctedPly, correctedMoment] of Object.entries(correctedMomentsDebug)) {
+          if (correctedMoment.move === moment.move && correctedMoment.comment === moment.comment) {
+            placedPly = parseInt(correctedPly);
+            wasPlaced = true;
+            break;
+          }
+        }
+        
+        // Determine status text and color
+        let statusText = 'Not placed';
+        let statusColor = '#cc0000';
+        
+        if (wasPlaced) {
+          if (placedPly === moment.ply) {
+            statusText = 'Placed correctly';
+            statusColor = '#008800';
+          } else {
+            statusText = `Moved to ply ${placedPly}`;
+            statusColor = '#ff8800';
+            row.style.backgroundColor = '#fff0f0'; // Highlight rows with changed ply
+          }
+        }
+        
+        // Determine color display
+        const colorDisplay = moment.color === 'white' ? 'White' : (moment.color === 'black' ? 'Black' : 'N/A');
+        
+        row.innerHTML = `
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${moment.ply}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${colorDisplay}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${moment.move || 'N/A'}</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd;">${
+            moment.comment 
+              ? (moment.comment.length > 40 
+                  ? moment.comment.substring(0, 40) + '...' 
+                  : moment.comment)
+              : 'N/A'
+          }</td>
+          <td style="padding: 3px 6px; border: 1px solid #ddd; color: ${statusColor};">${statusText}</td>
+        `;
+        
+        tbody.appendChild(row);
+      });
+      
+      momentsTable.appendChild(tbody);
+      debugSection.appendChild(momentsTable);
+      
+      summaryContainer.appendChild(debugSection);
+    }
     
     analysisContent.appendChild(summaryContainer);
     
