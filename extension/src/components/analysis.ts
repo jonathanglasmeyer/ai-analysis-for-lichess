@@ -824,12 +824,18 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
           const el2 = el1?.nextElementSibling;
           const el3 = el2?.nextElementSibling;
 
-          const alreadyCorrectlyStructured = 
+          const isAIStructurePresent = 
               el1?.matches('move.empty[data-ai-empty-id]') &&
               el2?.matches(`index[data-ai-created-index-for-ply="${blackPly}"]`) &&
               el3?.matches('move.empty[data-ai-empty-id]');
 
-          if (!alreadyCorrectlyStructured) {
+          const isLichessNativeStructurePresent =
+              el1?.matches('move.empty:not([data-ai-empty-id])') &&
+              el2?.matches('index:not([data-ai-created-index-for-ply])') && 
+              (el2?.textContent?.trim() === (blackPly / 2).toString() || el2?.textContent?.trim() === `${blackPly / 2}.`) &&
+              el3?.matches('move.empty:not([data-ai-empty-id])');
+
+          if (!isAIStructurePresent && !isLichessNativeStructurePresent) {
             console.log(`[EmptyMoveDebug] -> Building structure (empty1, newIndex, empty2) for whitePly ${whitePly}, blackPly ${blackPly}. Insertion after: ${pointOfInsertion.tagName} '${pointOfInsertion.textContent?.trim().substring(0,10)}'`);
             
             // Create emptyMove1
@@ -892,7 +898,12 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
 
             console.log(`[EmptyMoveDebug] -> Inserted structure: empty1, newIndex, empty2.`);
           } else {
-            console.log(`[EmptyMoveDebug] -> Full AI structure (empty1, newIndex, empty2) already exists for whitePly ${whitePly}.`);
+            if (isAIStructurePresent) {
+              console.log(`[EmptyMoveDebug] -> Full AI structure (empty1, newIndex, empty2) already exists for whitePly ${whitePly}.`);
+            }
+            if (isLichessNativeStructurePresent) {
+              console.log(`[EmptyMoveDebug] -> Lichess native structure already exists for blackPly ${blackPly}. Skipping AI structure insertion.`);
+            }
           }
         } else {
           // Conditions for this specific 3-element structure not met.
