@@ -17,7 +17,18 @@ interface AnalyzeRequest {
 interface AnalyzeResponse {
   ok: boolean;
   summary: string;
+  moments?: AnalysisMoment[]; // Array der wichtigsten Züge mit Kommentaren
   cached?: boolean; // Zeigt an, ob die Antwort aus dem Cache kam
+}
+
+interface AnalysisMoment {
+  ply: number;
+  move: string;
+  color: 'white' | 'black';
+  comment: string;
+  recommendation?: string;
+  reasoning?: string;
+  eval?: string;
 }
 
 interface CheckCacheRequest {
@@ -332,11 +343,13 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
         console.log('Cache check: HIT', body.locale ? 'mit Locale' : 'ohne Locale');
         
         // Gibt zurück, dass die Analyse im Cache ist, zusammen mit der Analyse selbst
+        // Stelle sicher, dass alle Daten, einschließlich der Zugs-Highlights (moments) korrekt zurückgegeben werden
         return c.json({
           inCache: true,
           analysis: {
             ...cachedEntry.response,
             cached: true
+            // moments werden bereits durch ...cachedEntry.response übernommen, da wir jetzt den Typ korrekt definiert haben
           }
         });
       } else {
