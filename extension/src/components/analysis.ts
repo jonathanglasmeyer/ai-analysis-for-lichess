@@ -132,8 +132,9 @@ function convertMovesToLinks(text: string): HTMLDivElement {
   
   // Definiere die Regex-Muster für weiße und schwarze Züge
   // Beispiel: "1. e4" (weiß) oder "1... e5" (schwarz)
-  const whiteMoveRegex = /(\d+)\s*\.(?!\.+)\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7]+)/g;
-  const blackMoveRegex = /(\d+)\s*\.{2,3}\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7]+)/g;
+  // Erweiterte Muster, um auch Züge mit Annotationen wie "Ng4?!" zu erkennen
+  const whiteMoveRegex = /(\d+)\s*\.(?!\.+)\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7\?\!]+)/g;
+  const blackMoveRegex = /(\d+)\s*\.{2,3}\s*([A-Za-z][A-Za-z0-9\+\-\=\#\!\?\u00d7\?\!]+)/g;
   
   // Sammle alle Matches in einem Array
   type MoveMatch = {
@@ -241,30 +242,79 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
       const moveElements = moveContainer.querySelectorAll('move');
 
       for (const moveEl of Array.from(moveElements)) {
+        // Verbesserte Erkennung des Zugs, der auch Glyphen berücksichtigt
         const sanNode = moveEl.querySelector('san');
-        const currentNotation = sanNode?.textContent?.trim() || moveEl.textContent?.trim();
-        if (currentNotation !== notation) continue;
+        
+        // Extrahiere den eigentlichen Zug ohne Annotationen
+        let currentNotation = '';
+        if (sanNode) {
+          // Wenn ein <san> Element vorhanden ist, verwende dessen Text
+          currentNotation = sanNode.textContent?.trim() || '';
+          console.log(`Found san node with text: '${currentNotation}'`);
+        } else {
+          // Fallback: Verwende den gesamten Text des move-Elements
+          currentNotation = moveEl.textContent?.trim() || '';
+          console.log(`Using fallback move text: '${currentNotation}'`);
+        }
+        
+        // Normalisiere die Notation für den Vergleich (entferne Annotationen wie ?! für den Vergleich)
+        const normalizeNotation = (move: string | undefined): string => {
+          if (!move) return '';
+          return move.replace(/[\?\!]+$/, '');
+        };
+        
+        const normalizedCurrentNotation = normalizeNotation(currentNotation);
+        const normalizedTargetNotation = normalizeNotation(notation);
+        
+        // Vergleiche die normalisierten Notationen
+        if (normalizedCurrentNotation !== normalizedTargetNotation) {
+          // Logge für Debug-Zwecke
+          console.log(`Move comparison failed: '${normalizedCurrentNotation}' vs '${normalizedTargetNotation}'`);
+          continue;
+        }
+        
+        console.log(`Move comparison succeeded: '${normalizedCurrentNotation}' vs '${normalizedTargetNotation}'`);
 
         // Find the preceding 'index' element to get the move number
         let prevSibling = moveEl.previousElementSibling;
         let currentMoveListNumber = '';
         let isCurrentMoveWhite = false;
 
+        // Verbesserte Erkennung von schwarzen Zügen mit leeren move-Elementen
         while (prevSibling) {
           if (prevSibling.tagName.toLowerCase() === 'index') {
             currentMoveListNumber = (prevSibling.textContent?.match(/^(\d+)/) || [])[1] || '';
-            // Determine color: if moveEl is the first 'move' after 'index', it's white's move.
-            // If it's the second 'move' (after white's move, possibly skipping an interrupt/empty), it's black's.
-            let siblingAfterIndex = prevSibling.nextElementSibling;
-            let moveCountAfterIndex = 0;
-            while(siblingAfterIndex && siblingAfterIndex !== moveEl && moveCountAfterIndex < 3) {
-              if (siblingAfterIndex.tagName.toLowerCase() === 'move' && !siblingAfterIndex.classList.contains('empty')) {
-                moveCountAfterIndex++;
+            console.log(`Found index with number: ${currentMoveListNumber}`);
+            
+            // Prüfe, ob es sich um einen schwarzen Zug handelt, indem wir nach einem leeren move-Element suchen
+            const emptyMove = prevSibling.nextElementSibling;
+            if (emptyMove && emptyMove.tagName.toLowerCase() === 'move' && 
+                emptyMove.classList.contains('empty') && 
+                emptyMove.textContent?.includes('...')) {
+              // Es ist ein schwarzer Zug
+              isCurrentMoveWhite = false;
+              console.log(`Detected BLACK move after empty move with '...'`);
+            } else {
+              // Es ist ein weißer Zug oder ein anderer Fall
+              // Determine color: if moveEl is the first 'move' after 'index', it's white's move.
+              // If it's the second 'move' (after white's move, possibly skipping an interrupt/empty), it's black's.
+              let siblingAfterIndex = prevSibling.nextElementSibling;
+              let moveCountAfterIndex = 0;
+              while(siblingAfterIndex && siblingAfterIndex !== moveEl && moveCountAfterIndex < 3) {
+                if (siblingAfterIndex.tagName.toLowerCase() === 'move' && !siblingAfterIndex.classList.contains('empty')) {
+                  moveCountAfterIndex++;
+                }
+                siblingAfterIndex = siblingAfterIndex.nextElementSibling;
               }
-              siblingAfterIndex = siblingAfterIndex.nextElementSibling;
+              if (siblingAfterIndex === moveEl && moveCountAfterIndex === 0) {
+                isCurrentMoveWhite = true;
+                console.log(`Detected WHITE move based on position`);
+              }
+              if (siblingAfterIndex === moveEl && moveCountAfterIndex === 1) {
+                isCurrentMoveWhite = false;
+                console.log(`Detected BLACK move based on position`);
+              }
             }
-            if (siblingAfterIndex === moveEl && moveCountAfterIndex === 0) isCurrentMoveWhite = true;
-            if (siblingAfterIndex === moveEl && moveCountAfterIndex === 1) isCurrentMoveWhite = false;
             break;
           }
           prevSibling = prevSibling.previousElementSibling;
