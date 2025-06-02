@@ -811,10 +811,11 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         
         console.log(`[EmptyMoveDebug] White Move: ${moveEl.textContent?.trim()} (ply ${whitePly}). White hasInterrupt: ${whiteHasInterrupt}. Black (ply ${blackPly}) hasInterrupt: ${blackHasInterrupt}`);
 
-        // USER RULE: If White has an interrupt AND Black (same full move) does NOT,
-        // insert structure: emptyMove1, newIndexElement, emptyMove2.
-        // BUT ONLY if there isn't already a similar structure (AI or Lichess native).
-        if (whiteHasInterrupt && !blackHasInterrupt) {
+        // We need to ensure we have the proper structure:
+        // white move -> empty move -> white interrupt -> index -> empty move -> black move -> black interrupt
+        // This applies even when both sides have interrupts
+        // BUT ONLY if there isn't already a similar structure (AI or Lichess native)
+        if (whiteHasInterrupt) {
           let pointOfInsertion = moveEl; // White's move element (ply: whitePly)
           if (moveEl.nextElementSibling?.tagName.toLowerCase() === 'interrupt') {
             pointOfInsertion = moveEl.nextElementSibling as HTMLElement; // White's interrupt element
