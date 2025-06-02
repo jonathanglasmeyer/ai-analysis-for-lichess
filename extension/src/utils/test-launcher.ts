@@ -47,8 +47,8 @@ export function addTestButton(): void {
     launchHighlightMovesTests();
   });
   
-  // Button zur Seite hinzufügen
-  document.body.appendChild(button);
   
-  console.log('🧪 Test-Button wurde hinzugefügt');
+  // Uncomment to enable test button
+  // document.body.appendChild(button);
+  
 }

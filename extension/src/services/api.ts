@@ -44,8 +44,7 @@ export interface AnalysisMoment {
   move: string;
   color: string; // 'white' oder 'black'
   comment: string;
-  recommendation?: string;
-  reasoning?: string;
+  isValidMove?: boolean; // Wird nicht mehr für Empfehlungen verwendet
 }
 
 /**

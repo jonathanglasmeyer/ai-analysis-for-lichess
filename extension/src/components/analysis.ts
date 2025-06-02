@@ -29,64 +29,39 @@ export function createAnalyzeButton(): HTMLButtonElement {
 }
 
 /**
- * Normalizes analysis data from different sources
+ * Normalisiert die Analysedaten in ein einheitliches Format
  */
 export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
-  // Unified data structure for analyses
+  // Einheitliches Ergebnisformat
   const normalized: NormalizedAnalysisData = {
     summary: '',
     moments: []
   };
   
-  // Log the response structure for analysis
-  console.log('Response to normalize:', response);
-  
-  // Case 1: Cache hit with originalResponse
-  if (response?.originalResponse?.analysis) {
-    normalized.summary = response.originalResponse.analysis.summary || '';
-    normalized.moments = response.originalResponse.analysis.moments || [];
-    console.log('Normalized from originalResponse.analysis. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
-  }
-  // Case 2: Cache hit with direct structure
-  else if (response?.summary) {
-    normalized.summary = response.summary || '';
+  // 1. Bestimme die Quelle der Daten
+  if (response?.summary) {
+    normalized.summary = response.summary;
     normalized.moments = response.moments || [];
-    console.log('Normalized from direct response. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
-  }
-  // Case 3: Fresh analysis with data structure
-  else if (response?.data) {
+  } else if (response?.data) {
     normalized.summary = response.data.summary || '';
     normalized.moments = response.data.moments || [];
-    console.log('Normalized from response.data. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
-  }
-  // Case 4: Direct analysis object
-  else if (response?.analysis) {
+  } else if (response?.analysis) {
     normalized.summary = response.analysis.summary || '';
     normalized.moments = response.analysis.moments || [];
-    console.log('Normalized from response.analysis. Moments:', JSON.parse(JSON.stringify(normalized.moments.find(m => m.move === 'Nc6' || m.comment?.includes('Nc6')) || normalized.moments)));
   }
   
-  // If the summary contains markdown code blocks, parse them
+  // 2. Wenn die Summary JSON enthält, extrahiere nur die Summary
   if (normalized.summary && normalized.summary.includes('```')) {
     try {
-      // Remove code block markers (```json and ```)
-      const cleanedText = normalized.summary.replace(/```json\n|```/g, '');
-      const jsonObject = JSON.parse(cleanedText.trim());
-      
-      // If the JSON object has a summary, use it
-      if (jsonObject.summary) {
-        normalized.summary = jsonObject.summary;
-        console.log('Parsed summary from JSON code block');
-        
-        // Also take moments if available
-        if (jsonObject.moments && Array.isArray(jsonObject.moments)) {
-          normalized.moments = jsonObject.moments;
-          
+      const jsonMatch = normalized.summary.match(/```(?:json)?\n([\s\S]*?)```/);
+      if (jsonMatch) {
+        const jsonObject = JSON.parse(jsonMatch[1].trim());
+        if (jsonObject.summary) {
+          normalized.summary = jsonObject.summary;
         }
       }
     } catch (e) {
-      console.log('Failed to parse JSON from code block, using raw summary:', e);
-      // Apply simple markdown formatting
+      // Bei Fehler: Formatiere die Summary als einfaches Markdown
       normalized.summary = normalized.summary
         .replace(/```json\n|```/g, '')
         .replace(/\n\n/g, '<br><br>')
@@ -94,10 +69,7 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
     }
   }
   
-  console.log('Normalized data:', {
-    summary: normalized.summary.substring(0, 50) + '...',
-    moments: normalized.moments.length
-  });
+  // Debug-Logs wurden entfernt
   
   return normalized;
 }
@@ -250,11 +222,10 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         if (sanNode) {
           // Wenn ein <san> Element vorhanden ist, verwende dessen Text
           currentNotation = sanNode.textContent?.trim() || '';
-          console.log(`Found san node with text: '${currentNotation}'`);
+          // Debug-Log entfernt
         } else {
           // Fallback: Verwende den gesamten Text des move-Elements
           currentNotation = moveEl.textContent?.trim() || '';
-          console.log(`Using fallback move text: '${currentNotation}'`);
         }
         
         // Normalisiere die Notation für den Vergleich (entferne Annotationen wie ?! für den Vergleich)
@@ -268,12 +239,11 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         
         // Vergleiche die normalisierten Notationen
         if (normalizedCurrentNotation !== normalizedTargetNotation) {
-          // Logge für Debug-Zwecke
-          console.log(`Move comparison failed: '${normalizedCurrentNotation}' vs '${normalizedTargetNotation}'`);
+          // Debug-Log entfernt
           continue;
         }
         
-        console.log(`Move comparison succeeded: '${normalizedCurrentNotation}' vs '${normalizedTargetNotation}'`);
+        // Debug-Log entfernt
 
         // Find the preceding 'index' element to get the move number
         let prevSibling = moveEl.previousElementSibling;
@@ -284,7 +254,7 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         while (prevSibling) {
           if (prevSibling.tagName.toLowerCase() === 'index') {
             currentMoveListNumber = (prevSibling.textContent?.match(/^(\d+)/) || [])[1] || '';
-            console.log(`Found index with number: ${currentMoveListNumber}`);
+            // Debug-Log entfernt
             
             // Prüfe, ob es sich um einen schwarzen Zug handelt, indem wir nach einem leeren move-Element suchen
             const emptyMove = prevSibling.nextElementSibling;
@@ -293,7 +263,7 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
                 emptyMove.textContent?.includes('...')) {
               // Es ist ein schwarzer Zug
               isCurrentMoveWhite = false;
-              console.log(`Detected BLACK move after empty move with '...'`);
+              // Debug-Log entfernt
             } else {
               // Es ist ein weißer Zug oder ein anderer Fall
               // Determine color: if moveEl is the first 'move' after 'index', it's white's move.
@@ -308,11 +278,11 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
               }
               if (siblingAfterIndex === moveEl && moveCountAfterIndex === 0) {
                 isCurrentMoveWhite = true;
-                console.log(`Detected WHITE move based on position`);
+                // Debug-Log entfernt
               }
               if (siblingAfterIndex === moveEl && moveCountAfterIndex === 1) {
                 isCurrentMoveWhite = false;
-                console.log(`Detected BLACK move based on position`);
+                // Debug-Log entfernt
               }
             }
             break;
@@ -505,6 +475,14 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
     return;
   }
   console.log('Moments:', moments);
+  
+  // Debug-Log für die isValidMove-Eigenschaft in highlightMovesInMoveList
+  if (moments && moments.length > 0) {
+    console.log('[DEBUG] Moments in highlightMovesInMoveList:');
+    moments.forEach((moment: any) => {
+      console.log(JSON.stringify(moment));
+    });
+  }
   
   // Simpler, more aggressive cleanup for all AI-generated elements
   console.log('🧹 Starting AI elements cleanup...');
@@ -1114,23 +1092,13 @@ export function injectAICommentStyles(): void {
  * Inserts an AI comment into an element
  */
 export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): void {
-  console.log(`[insertAIComment] Inserting AI comment into element:`, element);
-  console.log(`[insertAIComment] Moment data:`, moment);
+  // Debug-Logs wurden entfernt
   
-  // Emoji for magic: ✨ (Sparkles)
   const commentHTML = `
     ${moment.comment || ''}
-    ${moment.recommendation ? `
-      <div class="ai-recommendation">
-        <span class="ai-recommendation-move">${i18next?.t?.('analysis.better') || 'Better is'} ${moment.recommendation}</span>
-        <div>${moment.reasoning || ''}</div>
-      </div>
-    ` : ''}
   `;
   
-  console.log(`[insertAIComment] Setting innerHTML to:`, commentHTML);
   element.innerHTML = commentHTML;
-  console.log(`[insertAIComment] Element after setting innerHTML:`, element.outerHTML);
 }
 
 /**
@@ -1188,8 +1156,8 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
     const formattedContent = convertMovesToLinks(normalizedData.summary);
     summaryContainer.appendChild(formattedContent);
     
-    // Add debugging section for moments
-    const debuggingEnabled = localStorage.getItem('chessGptDebugMoments') === 'true';
+    // CHANGE TO TRUE IF DEBUGGING IS NEEDED
+    const debuggingEnabled = false;
     
     // Add toggle button for debugging
     const debugToggle = document.createElement('div');
@@ -1428,7 +1396,7 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   
   // Implement highlights in the move list if moments are available
   if (normalizedData.moments && normalizedData.moments.length > 0) {
-    console.log(`Highlighting ${normalizedData.moments.length} moments in move list`);
+    // Debug-Logs wurden entfernt
     // Find the move list
     const moveListContainer = document.querySelector('.tview2');
     if (moveListContainer) {

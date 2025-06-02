@@ -258,7 +258,7 @@ async function performAnalysis(pgn: string, locale?: string) {
         throw e;
       });
       
-      console.log('Analysis API response parsed successfully. Raw result:', JSON.stringify(result));
+      // Debug-Logs wurden entfernt
       
       // Error handling: If backend returned ok: false, surface error and set success: false
       if (result && result.ok === false) {

@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
 import { apiKeyAuth } from './auth-middleware';
+import { Chess } from 'chess.js';
 
 // Types
 interface AnalyzeRequest {
@@ -21,14 +22,13 @@ interface AnalyzeResponse {
   cached?: boolean; // Zeigt an, ob die Antwort aus dem Cache kam
 }
 
-interface AnalysisMoment {
+// Interface für Analyse-Momente
+export interface AnalysisMoment {
   ply: number;
-  move: string;
-  color: 'white' | 'black';
-  comment: string;
-  recommendation?: string;
-  reasoning?: string;
-  eval?: string;
+  move?: string;
+  color?: string;
+  comment?: string;
+  isValidMove?: boolean; // Wird nicht mehr verwendet, da keine Empfehlungen mehr gegeben werden
 }
 
 interface CheckCacheRequest {
@@ -52,13 +52,13 @@ interface CacheEntry {
 const CACHE_DIR = path.join(process.cwd(), 'cache');
 const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 Tage in Millisekunden
 
-// Initialisiere den Cache-Ordner
+// Stelle sicher, dass der Cache-Ordner existiert
 async function initializeCache() {
   try {
     await fs.mkdir(CACHE_DIR, { recursive: true });
-    console.log(`Cache directory initialized at ${CACHE_DIR}`);
+    console.log(`Cache directory ensured at ${CACHE_DIR}`);
   } catch (error) {
-    console.error('Failed to initialize cache directory:', error);
+    console.error('Failed to ensure cache directory exists:', error);
   }
 }
 
@@ -197,6 +197,140 @@ function sanitizeClaudeResponse(response: string): string {
       return response;
     }
   }
+}
+
+// Interface für Ply-Korrekturen
+export interface PlyCorrection {
+  san: string;
+  originalPly: number;
+  newPly: number;
+  diff: number;
+}
+
+// Funktion zur Korrektur der Ply-Werte basierend auf der tatsächlichen Zugshistorie
+export function correctPlies(pgn: string, moments: AnalysisMoment[]): {
+  correctedMoments: AnalysisMoment[],
+  corrections: PlyCorrection[]
+} {
+  console.log('[PlyCorrection] Starting ply correction for', moments.length, 'moments');
+  
+  // Erstelle ein neues Chess-Objekt und lade das PGN
+  const chess = new Chess();
+  try {
+    chess.loadPgn(pgn);
+  } catch (error) {
+    console.error('[PlyCorrection] Error loading PGN into chess.js:', error);
+    return { correctedMoments: moments, corrections: [] }; // Rückgabe der unveränderten Momente bei Fehler
+  }
+  
+  // Hole die vollständige Zugshistorie
+  const history = chess.history({ verbose: true });
+  console.log('[PlyCorrection] Game history length:', history.length, 'moves');
+  
+  // Map für korrigierte Momente und Korrekturen
+  const correctedMomentsMap: Record<number, AnalysisMoment> = {};
+  const corrections: PlyCorrection[] = [];
+  const assignedMoments = new Set<AnalysisMoment>();
+  
+  // Pass 1: Exakter Match von API-Ply und tatsächlichem Ply, sowie SAN-Match
+  moments.forEach(moment => {
+    if (!moment.move || assignedMoments.has(moment)) return;
+    
+    // Normalisiere den Zug (entferne Annotationen)
+    const normalizedMove = moment.move.replace(/[\s\?\!\.]+/g, '');
+    
+    // Prüfe, ob der Ply-Wert innerhalb der Spielhistorie liegt
+    // Da wir zu 1-basierter Ply-Zählung wechseln, müssen wir moment.ply - 1 verwenden
+    // um den korrekten Index im history-Array zu erhalten
+    if (moment.ply >= 1 && moment.ply - 1 < history.length) {
+      // Da Ply-Werte 1-basiert sind, müssen wir moment.ply - 1 verwenden
+      // um den korrekten Index im history-Array zu erhalten
+      const historyMove = history[moment.ply - 1];
+      const historySan = historyMove.san;
+      
+      // Prüfe auf exakten Match
+      if (normalizedMove === historySan) {
+        console.log(`[PlyCorrection] Pass 1: Exact match for SAN '${normalizedMove}' at ply ${moment.ply}`);
+        // Bei exaktem Match ist keine Korrektur nötig, da wir bereits 1-basierte Ply-Werte verwenden
+        correctedMomentsMap[moment.ply] = { ...moment };
+        assignedMoments.add(moment);
+        
+        // Keine Korrektur nötig, aber wir tracken es trotzdem
+        corrections.push({
+          san: normalizedMove,
+          originalPly: moment.ply,
+          newPly: moment.ply,
+          diff: 0
+        });
+      }
+    }
+  });
+  
+  // Pass 2: SAN-Match, aber API-Ply ist um +/-2 daneben
+  moments.forEach(moment => {
+    if (!moment.move || assignedMoments.has(moment)) return;
+    
+    // Normalisiere den Zug (entferne Annotationen)
+    const normalizedMove = moment.move.replace(/[\s\?\!\.]+/g, '');
+    
+    // Suche nach dem Zug in der Historie mit einer Toleranz von +/-2 Plies
+    for (let offset = -2; offset <= 2; offset++) {
+      if (offset === 0) continue; // Bereits in Pass 1 geprüft
+      
+      // Berechne den zu prüfenden Ply-Wert (1-basiert)
+      const checkPly = moment.ply + offset;
+      // Konvertiere zu 0-basiertem Index für history-Array
+      const historyIndex = checkPly - 1;
+      
+      if (checkPly >= 1 && historyIndex < history.length) {
+        const historyMove = history[historyIndex];
+        const historySan = historyMove.san;
+        
+        if (normalizedMove === historySan && !correctedMomentsMap[checkPly]) {
+          console.log(`[PlyCorrection] Pass 2: Adjusting moment for SAN '${normalizedMove}' from API ply ${moment.ply} to history ply ${checkPly} (diff: ${offset})`);
+          
+          // Korrigiere den Ply-Wert auf den gefundenen checkPly (bereits 1-basiert)
+          const correctedMoment = { ...moment, ply: checkPly };
+          correctedMomentsMap[checkPly] = correctedMoment;
+          assignedMoments.add(moment);
+          
+          // Tracke die Korrektur
+          corrections.push({
+            san: normalizedMove,
+            originalPly: moment.ply,
+            newPly: checkPly,
+            diff: offset
+          });
+          
+          break; // Sobald ein Match gefunden wurde, beenden
+        }
+      }
+    }
+  });
+  
+  // Erstelle ein Array aus den korrigierten Momenten
+  const correctedMoments = Object.values(correctedMomentsMap);
+  
+  // Füge unkorrigierte Momente hinzu
+  moments.forEach(moment => {
+    if (!assignedMoments.has(moment)) {
+      console.log(`[PlyCorrection] Moment for move '${moment.move}' at ply ${moment.ply} could not be corrected`);
+      correctedMoments.push(moment);
+    }
+  });
+  
+  // Sortiere nach Ply
+  correctedMoments.sort((a, b) => a.ply - b.ply);
+  
+  console.log(`[PlyCorrection] Completed with ${corrections.length} corrections`);
+  return { correctedMoments, corrections };
+}
+
+// Funktion zur Korrektur der Ply-Werte in den Momenten
+export function correctMomentPlies(pgn: string, moments: AnalysisMoment[]): AnalysisMoment[] {
+  // Korrigiere die Ply-Werte
+  const { correctedMoments } = correctPlies(pgn, moments);
+  return correctedMoments;
 }
 
 // Hilfsfunktion zur Reparatur von JSON-Inhalten
@@ -342,14 +476,20 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
       if (now - cachedEntry.timestamp < CACHE_EXPIRY) {
         console.log('Cache check: HIT', body.locale ? 'mit Locale' : 'ohne Locale');
         
+        // Stelle sicher, dass die Cache-Einträge korrekte Ply-Werte haben
+        let cachedResponse = cachedEntry.response;
+        if (cachedResponse && cachedResponse.moments && Array.isArray(cachedResponse.moments)) {
+          // Korrigiere die Ply-Werte
+          const { correctedMoments } = correctPlies(normalizedPgn, cachedResponse.moments);
+          cachedResponse.moments = correctedMoments;
+        }
+        
         // Gibt zurück, dass die Analyse im Cache ist, zusammen mit der Analyse selbst
-        // Stelle sicher, dass alle Daten, einschließlich der Zugs-Highlights (moments) korrekt zurückgegeben werden
         return c.json({
           inCache: true,
           analysis: {
-            ...cachedEntry.response,
+            ...cachedResponse,
             cached: true
-            // moments werden bereits durch ...cachedEntry.response übernommen, da wir jetzt den Typ korrekt definiert haben
           }
         });
       } else {
@@ -465,9 +605,7 @@ Example:
       "ply": 0,
       "move": "string",
       "color": "white|black",
-      "comment": "string",
-      "recommendation": "string",
-      "reasoning": "string"
+      "comment": "string"
     }
   ]
 }
@@ -489,9 +627,6 @@ Example:
    - \`move\`: The move played in SAN notation (e.g. Nf3, Qxd5, O-O)
    - \`color\`: \`"white"\` or \`"black"\`
    - \`comment\`: Explanation of why this move is important, what it achieves, or why it's good/bad
-   - \`recommendation\`: (optional) A better move if the played move wasn't optimal
-   - \`reasoning\`: (optional) Why the recommended move would have been better
-   - (optional) \`eval\`: Evaluation before and after the move (e.g. \`+0.3 → -1.2\`), if known
 
 Write the analysis so that it is understandable and useful for advanced beginners up to lower club level (around 1400 Elo). **Do not return any text outside the JSON block.**
 
@@ -539,6 +674,9 @@ ${normalizedPgn}`;
         }
       }
 
+      // Logge die vollständige Antwort von Anthropic
+      console.log('Raw Anthropic response:', JSON.stringify(message, null, 2));
+      
       // Die aktuelle Anthropic SDK-Version gibt das Ergebnis in einer anderen Struktur zurück
       let summary = '';
       if (message.content && message.content.length > 0) {
@@ -550,13 +688,44 @@ ${normalizedPgn}`;
         }
       }
       
+      // Logge die extrahierte Summary
+      console.log('Extracted summary:', summary);
+      
       // Sanitize und repariere die Claude-Antwort, falls nötig
       summary = sanitizeClaudeResponse(summary);
-
+      
+      // Parse the JSON response
+      let parsedResponse: any = {};
+      try {
+        // Versuche, die Antwort als JSON zu parsen
+        const jsonBlockRegex = /```(?:json)?([\s\S]*?)```/g;
+        const match = jsonBlockRegex.exec(summary);
+        
+        if (match && match[1]) {
+          parsedResponse = JSON.parse(match[1].trim());
+        } else {
+          // Try parsing directly
+          parsedResponse = JSON.parse(summary);
+        }
+      } catch (error) {
+        console.error('Error parsing JSON response:', error);
+        // Continue with empty response if parsing fails
+      }
+      
+      // Korrigiere die Ply-Werte, wenn Momente vorhanden sind
+      if (parsedResponse.moments && Array.isArray(parsedResponse.moments)) {
+        const { correctedMoments } = correctPlies(normalizedPgn, parsedResponse.moments);
+        console.log('Corrected moments:', JSON.stringify(correctedMoments, null, 2));
+        
+        // Setze die korrigierten Momente
+        parsedResponse.moments = correctedMoments;
+      }
+      
       // Erstelle die Antwort
       const response: AnalyzeResponse = {
         ok: true,
         summary: summary,
+        moments: parsedResponse.moments || [],
         cached: false
       };
       

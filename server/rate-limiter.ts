@@ -67,7 +67,7 @@ export class RateLimiter {
       const ip = 
         c.req.header('X-Forwarded-For')?.split(',')[0] || 
         c.req.header('X-Real-IP') || 
-        c.req.raw.socket.remoteAddress || 
+        (c.req.raw?.socket?.remoteAddress) || 
         '0.0.0.0';
       
       if (this.check(ip)) {
