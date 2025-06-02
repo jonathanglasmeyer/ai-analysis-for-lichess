@@ -813,6 +813,7 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
 
         // USER RULE: If White has an interrupt AND Black (same full move) does NOT,
         // insert structure: emptyMove1, newIndexElement, emptyMove2.
+        // BUT ONLY if there isn't already a similar structure (AI or Lichess native).
         if (whiteHasInterrupt && !blackHasInterrupt) {
           let pointOfInsertion = moveEl; // White's move element (ply: whitePly)
           if (moveEl.nextElementSibling?.tagName.toLowerCase() === 'interrupt') {
@@ -824,17 +825,96 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
           const el2 = el1?.nextElementSibling;
           const el3 = el2?.nextElementSibling;
 
+          // Detailed debugging of the next elements
+          console.log(`[EmptyMoveDebug] Examining structure after ${pointOfInsertion.tagName}:`, {
+            el1: el1 ? { 
+              tagName: el1.tagName.toLowerCase(), 
+              className: el1.className, 
+              isEmptyMove: el1.matches('move.empty'),
+              hasAIAttribute: el1.hasAttribute('data-ai-empty-id'),
+              textContent: el1.textContent?.trim()
+            } : null,
+            el2: el2 ? { 
+              tagName: el2.tagName.toLowerCase(), 
+              className: el2.className, 
+              isIndex: el2.tagName.toLowerCase() === 'index',
+              hasAIAttribute: el2.hasAttribute('data-ai-created-index-for-ply'),
+              textContent: el2.textContent?.trim(),
+              expectedNumber: (blackPly / 2).toString()
+            } : null,
+            el3: el3 ? { 
+              tagName: el3.tagName.toLowerCase(), 
+              className: el3.className, 
+              isEmptyMove: el3.matches('move.empty'),
+              hasAIAttribute: el3.hasAttribute('data-ai-empty-id'),
+              textContent: el3.textContent?.trim()
+            } : null
+          });
+
+          // Check for our AI structure
           const isAIStructurePresent = 
               el1?.matches('move.empty[data-ai-empty-id]') &&
               el2?.matches(`index[data-ai-created-index-for-ply="${blackPly}"]`) &&
               el3?.matches('move.empty[data-ai-empty-id]');
 
-          const isLichessNativeStructurePresent =
-              el1?.matches('move.empty:not([data-ai-empty-id])') &&
-              el2?.matches('index:not([data-ai-created-index-for-ply])') && 
-              (el2?.textContent?.trim() === (blackPly / 2).toString() || el2?.textContent?.trim() === `${blackPly / 2}.`) &&
-              el3?.matches('move.empty:not([data-ai-empty-id])');
+          // Check for Lichess native structure - more flexible matching
+          // We need to be more lenient with the Lichess structure detection
+          // There are multiple patterns we need to check for:
+          
+          // Pattern 1: empty move -> index -> empty move
+          const isStandardLichessPattern = 
+              // First element should be an empty move without our AI attribute
+              el1?.tagName.toLowerCase() === 'move' && 
+              el1?.classList.contains('empty') &&
+              !el1?.hasAttribute('data-ai-empty-id') &&
+              // Second element should be an index with the right number (could be '14' or '14.')
+              el2?.tagName.toLowerCase() === 'index' &&
+              !el2?.hasAttribute('data-ai-created-index-for-ply') &&
+              (el2?.textContent?.trim() === (blackPly / 2).toString() || 
+               el2?.textContent?.trim() === `${blackPly / 2}.` ||
+               el2?.textContent?.trim().startsWith(`${blackPly / 2}`)) &&
+              // Third element should be an empty move without our AI attribute
+              el3?.tagName.toLowerCase() === 'move' &&
+              el3?.classList.contains('empty') &&
+              !el3?.hasAttribute('data-ai-empty-id');
+              
+          // Pattern 2: empty move -> interrupt -> anything
+          // This is the pattern we're seeing in your logs
+          const isInterruptPattern = 
+              // First element should be an empty move without our AI attribute
+              el1?.tagName.toLowerCase() === 'move' && 
+              el1?.classList.contains('empty') &&
+              !el1?.hasAttribute('data-ai-empty-id') &&
+              // Second element is an interrupt
+              el2?.tagName.toLowerCase() === 'interrupt';
+              
+          // Pattern 3: Check if there are any empty moves ahead
+          // Look ahead up to 5 elements to find empty moves
+          let hasEmptyMovesAhead = false;
+          let nextEl = pointOfInsertion.nextElementSibling;
+          let checkCount = 0;
+          while (nextEl && checkCount < 5) {
+              if (nextEl.tagName.toLowerCase() === 'move' && 
+                  nextEl.classList.contains('empty') && 
+                  !nextEl.hasAttribute('data-ai-empty-id')) {
+                  hasEmptyMovesAhead = true;
+                  break;
+              }
+              nextEl = nextEl.nextElementSibling;
+              checkCount++;
+          }
+          
+          // Combine all patterns
+          const isLichessNativeStructurePresent = isStandardLichessPattern || isInterruptPattern || hasEmptyMovesAhead;
 
+          // Log the detection results
+          console.log(`[EmptyMoveDebug] Structure detection:`, {
+            isAIStructurePresent,
+            isLichessNativeStructurePresent,
+            blackPlyNumber: blackPly / 2
+          });
+
+          // Only proceed if neither structure is present
           if (!isAIStructurePresent && !isLichessNativeStructurePresent) {
             console.log(`[EmptyMoveDebug] -> Building structure (empty1, newIndex, empty2) for whitePly ${whitePly}, blackPly ${blackPly}. Insertion after: ${pointOfInsertion.tagName} '${pointOfInsertion.textContent?.trim().substring(0,10)}'`);
             
