@@ -1159,26 +1159,7 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
     // CHANGE TO TRUE IF DEBUGGING IS NEEDED
     const debuggingEnabled = false;
     
-    // Add toggle button for debugging
-    const debugToggle = document.createElement('div');
-    debugToggle.style.marginTop = '20px';
-    debugToggle.style.paddingTop = '10px';
-    debugToggle.style.borderTop = '1px solid #ddd';
     
-    const toggleButton = document.createElement('button');
-    toggleButton.textContent = debuggingEnabled ? 'Hide Debug Info' : 'Show Debug Info';
-    toggleButton.style.fontSize = '12px';
-    toggleButton.style.padding = '4px 8px';
-    toggleButton.style.marginBottom = '10px';
-    toggleButton.style.cursor = 'pointer';
-    toggleButton.onclick = () => {
-      const newState = localStorage.getItem('chessGptDebugMoments') !== 'true';
-      localStorage.setItem('chessGptDebugMoments', newState ? 'true' : 'false');
-      location.reload(); // Reload to apply changes
-    };
-    
-    debugToggle.appendChild(toggleButton);
-    summaryContainer.appendChild(debugToggle);
     
     // Display debug information if enabled
     if (debuggingEnabled && normalizedData.moments) {
