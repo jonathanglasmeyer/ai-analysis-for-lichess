@@ -5,6 +5,7 @@
 import { waitForElement, analyzeDOM } from './utils/dom';
 import { setupI18n, observeLanguageChange, detectLichessLanguage, resolveLanguageForPrompt } from './i18n';
 import i18next from 'i18next';
+import { addTestButton } from './utils/test-launcher';
 
 // Initialize i18n before any translations are used
 setupI18n();
@@ -308,6 +309,7 @@ async function addAiAnalysisTab(): Promise<void> {
 // Initialize when the page is fully loaded
 window.addEventListener('load', () => {
   addAiAnalysisTab();
+  addTestButton(); // Füge Test-Button hinzu
 });
 
 // Fallback: Initialize immediately if page is already loaded

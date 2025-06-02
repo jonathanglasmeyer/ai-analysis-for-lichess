@@ -458,16 +458,16 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
   
   // Simpler, more aggressive cleanup for all AI-generated elements
   console.log('🧹 Starting AI elements cleanup...');
-  document.querySelectorAll('[data-ai-empty-id]').forEach(el => {
+  moveListContainer.querySelectorAll('[data-ai-empty-id]').forEach(el => {
     console.log(`🗑️ Removing AI-created empty move (ID: ${el.getAttribute('data-ai-empty-id')})`);
     el.remove();
   });
-  document.querySelectorAll('index[data-ai-created-index-for-ply]').forEach(el => {
+  moveListContainer.querySelectorAll('index[data-ai-created-index-for-ply]').forEach(el => {
     console.log(`🗑️ Removing AI-created index (for ply: ${el.getAttribute('data-ai-created-index-for-ply')})`);
     el.remove();
   });
 
-  const aiCommentsToRemove = Array.from(document.querySelectorAll('.ai-comment'));
+  const aiCommentsToRemove = Array.from(moveListContainer.querySelectorAll('.ai-comment'));
   aiCommentsToRemove.forEach(aiComment => {
     console.log('🗑️ Removing AI comment');
     const interrupt = aiComment.closest('interrupt');
@@ -637,7 +637,7 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
       // Toleranz für ungenaue Ply-Werte einbauen
       // Auch bei leichten Abweichungen (±1) sollen die Kommentare angezeigt werden
       let moment = currentCorrectedMomentsByPly[ply];
-      
+
       // Wenn kein Moment für den exakten Ply gefunden wurde, versuche benachbarte Plys
       if (!moment) {
         // Erst prüfen, ob ein Zug mit dem gleichen Text in einem benachbarten Ply existiert
@@ -648,10 +648,10 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
         for (const offset of [-1, 1]) {
           const nearbyPly = ply + offset;
           const nearbyMoment = currentCorrectedMomentsByPly[nearbyPly];
-          
+
           if (nearbyMoment && nearbyMoment.move) {
             const trimmedMomentMove = nearbyMoment.move.replace(/[\s\?\.\!]+/g, '');
-            
+
             // Wenn der Zugtext exakt übereinstimmt (nach Bereinigung)
             if (trimmedMoveText === trimmedMomentMove) {
               moment = nearbyMoment;
@@ -729,8 +729,10 @@ export function highlightMovesInMoveList(moveListContainer: HTMLElement, moments
     };
 
     // Iteriere über die `plyByMoveEl` Map, um die Reihenfolge der DOM-Elemente beizubehalten
+    let processedMoves = 0;
     plyByMoveEl.forEach((ply, moveEl) => {
       processMove(moveEl, ply, finalCorrectedMomentsByPly);
+      processedMoves++;
     });
 
     // Nach allen Moment-Verarbeitungen: Erstelle Empty-Moves für die Darstellung
@@ -970,16 +972,23 @@ export function injectAICommentStyles(): void {
  * Inserts an AI comment into an element
  */
 export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): void {
+  console.log(`[insertAIComment] Inserting AI comment into element:`, element);
+  console.log(`[insertAIComment] Moment data:`, moment);
+  
   // Emoji for magic: ✨ (Sparkles)
-  element.innerHTML = `
+  const commentHTML = `
     ${moment.comment || ''}
     ${moment.recommendation ? `
       <div class="ai-recommendation">
-        <span class="ai-recommendation-move">${i18next.t('analysis.better')} ${moment.recommendation}</span>
+        <span class="ai-recommendation-move">${i18next?.t?.('analysis.better') || 'Better is'} ${moment.recommendation}</span>
         <div>${moment.reasoning || ''}</div>
       </div>
     ` : ''}
   `;
+  
+  console.log(`[insertAIComment] Setting innerHTML to:`, commentHTML);
+  element.innerHTML = commentHTML;
+  console.log(`[insertAIComment] Element after setting innerHTML:`, element.outerHTML);
 }
 
 /**
