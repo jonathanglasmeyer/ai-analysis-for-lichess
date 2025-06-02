@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Set working directory to the script's location for robustness
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 # Konfiguration
 SERVER="hetzner"
 REMOTE_DIR="/opt/ai-analysis-for-lichess"
@@ -12,6 +16,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${YELLOW}Deploying ai-analysis-for-lichess to Hetzner server...${NC}"
+echo -e "${YELLOW}Working from directory: $(pwd)${NC}"
 
 # Erstelle Remote-Verzeichnis, falls es nicht existiert
 echo -e "${YELLOW}Creating remote directory if it doesn't exist...${NC}"

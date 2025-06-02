@@ -59,6 +59,20 @@ This project includes scripts for easy deployment to a Hetzner server.
    ```bash
    ssh hetzner "nano /opt/ai-analysis-for-lichess/.env"
    ```
+
+### Updating the Server
+
+For regular code updates (without reinstalling dependencies or reconfiguring services):
+
+1. Run the update script from the project root or server directory:
+   ```bash
+   ./server/update.sh
+   ```
+
+This lightweight script will:
+- Copy only the updated files to the server
+- Restart the service
+- Show the service status
 5. Set up API key authentication:
    ```bash
    ./setup-api-key.sh

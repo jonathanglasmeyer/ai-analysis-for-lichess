@@ -51,6 +51,12 @@ async function initializeCache() {
   }
 }
 
+// Normalisiert ein PGN für konsistente Cache-Lookups
+function normalizePgn(pgn: string): string {
+  // Entferne Kommentare, Varianten und überflüssige Leerzeichen
+  return pgn.replace(/\{[^\}]*\}/g, '').replace(/\([^\)]*\)/g, '').trim();
+}
+
 // Generiere einen Hash für das PGN als Dateinamen
 function getCacheFilename(pgn: string, locale?: string): string {
   // Wenn eine Locale angegeben ist, füge sie zum Hash hinzu
@@ -301,9 +307,9 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
       return c.json({ inCache: false }, 400);
     }
     
-    // Normalisiere das PGN
+    // Normalisiere das PGN mit der gemeinsamen Funktion
     console.log('[CACHE] Original PGN hash:', crypto.createHash('md5').update(body.pgn).digest('hex'));
-    const normalizedPgn = body.pgn.trim();
+    const normalizedPgn = normalizePgn(body.pgn);
     console.log('[CACHE] Normalized PGN hash:', crypto.createHash('md5').update(normalizedPgn).digest('hex'));
     console.log('[CACHE] Cache key with locale:', getCacheFilename(normalizedPgn, body.locale));
     console.log('[CACHE] Cache key without locale:', getCacheFilename(normalizedPgn));
@@ -385,9 +391,9 @@ app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
       return c.json({ ok: false, error: 'Missing PGN data' }, 400);
     }
     
-    // Normalisiere das PGN (entferne Whitespace), um bessere Cache-Treffer zu erzielen
+    // Normalisiere das PGN mit der gemeinsamen Funktion
     console.log('[CACHE] Analyze: Original PGN hash:', crypto.createHash('md5').update(body.pgn).digest('hex'));
-    const normalizedPgn = body.pgn.trim();
+    const normalizedPgn = normalizePgn(body.pgn);
     console.log('[CACHE] Analyze: Normalized PGN hash:', crypto.createHash('md5').update(normalizedPgn).digest('hex'));
     console.log('[CACHE] Analyze: Cache key with locale:', getCacheFilename(normalizedPgn, locale));
     console.log('[CACHE] Analyze: Cache key without locale:', getCacheFilename(normalizedPgn));
