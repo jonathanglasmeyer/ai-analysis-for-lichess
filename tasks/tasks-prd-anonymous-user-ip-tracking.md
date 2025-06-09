@@ -16,17 +16,17 @@
 
 - Unit tests should typically be placed alongside the code files they are testing or in a dedicated `tests` subdirectory mirroring the `src` structure.
 - Use `bun test [optional/path/to/test/file]` (or your configured test command) to run tests. Running without a path executes all tests.
-- Remember to add `server/data/` or specifically `server/data/ip_tracking.sqlite` to your `.gitignore` file if you don't want to commit the database file itself (recommended).
+- Remember to add `server/data/` or specifically `server/data/usage_tracking.sqlite` to your `.gitignore` file if you don't want to commit the database file itself (recommended).
 
 ## Tasks
 
-- [ ] **1.0 Initialize SQLite Database and Table for Anonymous Usage Tracking**
-  - [ ] 1.1 Add `better-sqlite3` as a project dependency using `bun add better-sqlite3`.
-  - [ ] 1.2 Create `server/src/db.ts`.
-  - [ ] 1.3 In `server/src/db.ts`, implement a function to get/create an SQLite database instance (e.g., connecting to `server/data/usage_tracking.sqlite`).
-  - [ ] 1.4 In `server/src/db.ts`, implement an initialization function that executes `CREATE TABLE IF NOT EXISTS user_usage (user_key TEXT PRIMARY KEY, is_anonymous BOOLEAN NOT NULL, analysis_count INTEGER NOT NULL DEFAULT 0, first_analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP, last_analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP);`.
-  - [ ] 1.5 Ensure the database initialization function from `db.ts` is called once during server startup in `server/index.ts`.
-  - [ ] 1.6 Create `server/src/db.test.ts` and write basic tests to verify table creation.
+- [x] **1.0 Initialize SQLite Database and Table for Anonymous Usage Tracking**
+  - [x] 1.1 Add `bun:sqlite` (native Bun module, no explicit add needed if using Bun). Dependency `better-sqlite3` removed.
+  - [x] 1.2 Create `server/src/db.ts`.
+  - [x] 1.3 In `server/src/db.ts`, implement a function to get/create an SQLite database instance (e.g., connecting to `server/data/usage_tracking.sqlite`).
+  - [x] 1.4 In `server/src/db.ts`, implement an initialization function that executes `CREATE TABLE IF NOT EXISTS user_usage (user_key TEXT PRIMARY KEY, is_anonymous BOOLEAN NOT NULL, analysis_count INTEGER NOT NULL DEFAULT 0, first_analysis_timestamp DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), last_analysis_timestamp DATETIME DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')));`. (Schema updated, switched to `bun:sqlite`)
+  - [x] 1.5 Ensure the database initialization function from `db.ts` is called once during server startup in `server/index.ts`.
+  - [x] 1.6 Create `server/src/db.test.ts` and write basic tests to verify table creation (adapted for `bun:sqlite`, tests passing).
 
 - [ ] **2.0 Implement IP Address Capturing and Secure Hashing Mechanism**
   - [ ] 2.1 Create `server/src/utils/ip-utils.ts`.

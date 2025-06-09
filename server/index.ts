@@ -6,6 +6,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
+import { initializeDatabase } from './src/db'; // Corrected path if db.ts is in src/
 import { apiKeyAuth } from './auth-middleware';
 import { Chess } from 'chess.js';
 
@@ -52,7 +53,15 @@ interface CacheEntry {
 const CACHE_DIR = path.join(process.cwd(), 'cache');
 const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 Tage in Millisekunden
 
-// Stelle sicher, dass der Cache-Ordner existiert
+// Initialize server components (cache and database) on startup
+initializeServer();
+
+async function initializeServer() {
+  await initializeCache(); // Initialize file system cache
+  initializeDatabase(); // Initialize SQLite database and tables (synchronous)
+  console.log('Server components initialized successfully.');
+}
+
 async function initializeCache() {
   try {
     await fs.mkdir(CACHE_DIR, { recursive: true });
@@ -754,6 +763,27 @@ ${normalizedPgn}`;
 });
 
 // Start the server
+// Helper function to initialize server components
+async function initializeServerComponents() {
+  await initializeCache(); // Initialize file system cache
+  try {
+    initializeDatabase(); // Initialize SQLite database and tables (this is synchronous)
+    console.log('Cache and Database initialized successfully.');
+  } catch (error) {
+    console.error('Failed to initialize database during server startup:', error);
+    // Depending on the application's needs, you might want to exit if DB is critical
+    // process.exit(1);
+  }
+}
+
+// Call initialization at the start
+initializeServerComponents().then(() => {
+  console.log('Server components initialization complete.');
+}).catch(error => {
+  console.error('Critical error during server components initialization:', error);
+  process.exit(1);
+});
+
 const port = parseInt(env.PORT || '3001');
 console.log(`Server is running on port ${port}`);
 
