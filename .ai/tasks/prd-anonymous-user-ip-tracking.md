@@ -47,15 +47,15 @@ FR8.  Requests to the `/analyze` endpoint that are successfully served from the 
 ## 7. Technical Considerations (Optional)
 
 *   The secret salt used for IP hashing **must** be treated as sensitive information, stored securely (e.g., as an environment variable or in a secrets management system), and be configurable.
-*   An SQLite database will be used. A table named `user_usage` will be required. This table is designed to be forward-compatible for tracking authenticated users in the future.
-    *   **Schema for `user_usage`**: 
+*   A Supabase (PostgreSQL) cloud-hosted database will be used. A table named `user_usage` (or `public.user_usage`) will be required in Supabase. This table is designed to be forward-compatible for tracking authenticated users in the future.
+    *   **Schema for `user_usage` (PostgreSQL syntax)**: 
         *   `user_key TEXT PRIMARY KEY`: For anonymous users, this will be the `hashed_ip`. For future authenticated users, this will be their `user_id`.
         *   `is_anonymous BOOLEAN NOT NULL`: `true` if `user_key` is a hashed IP, `false` if it's a `user_id`.
         *   `analysis_count INTEGER NOT NULL DEFAULT 0`: The number of analyses performed.
-        *   `first_analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`: Timestamp of the first analysis.
-        *   `last_analysis_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`: Timestamp of the most recent analysis.
-*   A suitable SQLite package (e.g., `better-sqlite3` for Bun/Node.js environments) will need to be added as a project dependency.
-*   Database initialization logic will be required at server startup to create the database file (if it doesn't exist) and the necessary table schema.
+        *   `first_analysis_timestamp TIMESTAMPTZ DEFAULT NOW() NOT NULL`: Timestamp of the first analysis.
+        *   `last_analysis_timestamp TIMESTAMPTZ DEFAULT NOW() NOT NULL`: Timestamp of the most recent analysis.
+*   The `@supabase/supabase-js` package will need to be added as a project dependency to interact with the Supabase instance.
+*   The Supabase table schema will be managed via the Supabase dashboard or SQL scripts. The server will require initialization of the Supabase client with appropriate credentials (`SUPABASE_URL`, `SUPABASE_ANON_KEY`).
 *   The logic for checking the cache, retrieving/updating the analysis count, and enforcing the limit **must** be integrated into the existing request handling flow for the `/analyze` endpoint.
 *   The hashing mechanism should be implemented in a way that is consistent and produces the same hash for the same IP and salt.
 
