@@ -34,21 +34,21 @@
     - [x] 1.3.3 Test für den Fall, dass keine IP ermittelt werden kann (in Produktionssimulation).
     - [ ] 1.3.4 Test für Fehler bei der Supabase-Abfrage (mocke `getUsage`, um einen Fehler zu werfen).
 
-- [ ] **2.0 Frontend: Display Usage in Extension Popup**
-  - [ ] 2.1 In `extension/src/popup/popup.html`:
-    - [ ] 2.1.1 Entferne den bisherigen Inhalt, der über die Lichess-Analyse-Seite informiert.
-    - [ ] 2.1.2 Füge ein HTML-Element (z.B. `<div id="usage-display"></div>`) hinzu, um den Nutzungsstatus anzuzeigen.
-  - [ ] 2.2 In `extension/src/popup/popup.ts` (oder der entsprechenden Logikdatei):
-    - [ ] 2.2.1 Implementiere eine Funktion, die beim Laden des Popups ausgeführt wird.
-    - [ ] 2.2.2 Zeige initial "Nutzung wird geladen..." im `#usage-display` Element an.
-    - [ ] 2.2.3 Sende eine `fetch`-Anfrage an den `GET /usage` Endpoint des Backends. Stelle sicher, dass der `Authorization`-Header mit dem `CHESS_GPT_API_KEY` korrekt gesetzt ist.
-    - [ ] 2.2.4 Bei erfolgreicher Antwort vom Backend:
-      - [ ] 2.2.4.1 Extrahiere `current` und `limit` aus der Antwort.
-      - [ ] 2.2.4.2 Aktualisiere das `#usage-display` Element mit dem Text "Analysen: [current] von [limit]".
-    - [ ] 2.2.5 Bei einer Fehlerantwort vom Backend oder einem Netzwerkfehler:
-      - [ ] 2.2.5.1 Zeige "Fehler beim Laden der Nutzung" im `#usage-display` Element an.
-      - [ ] 2.2.5.2 Logge den detaillierten Fehler in der Konsole der Extension.
-  - [ ] 2.3 Überprüfe `extension/manifest.json`, ob die Host-Permissions für den API-Aufruf zum Backend korrekt konfiguriert sind (wahrscheinlich bereits durch `/analyze` abgedeckt).
+- [x] **2.0 Frontend: Display Usage in Extension Popup**
+  - [x] 2.1 In `extension/public/popup.html`:
+    - [x] 2.1.1 Entferne den bisherigen Inhalt, der über die Lichess-Analyse-Seite informiert.
+    - [x] 2.1.2 Füge ein HTML-Element (z.B. `<div id="usage-display"></div>`) hinzu, um den Nutzungsstatus anzuzeigen.
+  - [x] 2.2 In `extension/src/popup/index.ts`:
+    - [x] 2.2.1 Implementiere eine Funktion, die beim Laden des Popups ausgeführt wird.
+    - [x] 2.2.2 Zeige initial "Nutzung wird geladen..." im `#usage-display` Element an.
+    - [x] 2.2.3 Sende eine `fetch`-Anfrage an den `GET /usage` Endpoint des Backends. Stelle sicher, dass der `Authorization`-Header mit dem `CHESS_GPT_API_KEY` korrekt gesetzt ist.
+    - [x] 2.2.4 Bei erfolgreicher Antwort vom Backend:
+      - [x] 2.2.4.1 Extrahiere `current` und `limit` aus der Antwort.
+      - [x] 2.2.4.2 Aktualisiere das `#usage-display` Element mit dem Text "Analysen: [current] von [limit]".
+    - [x] 2.2.5 Bei einer Fehlerantwort vom Backend oder einem Netzwerkfehler:
+      - [x] 2.2.5.1 Zeige "Fehler beim Laden der Nutzung" im `#usage-display` Element an.
+      - [x] 2.2.5.2 Logge den detaillierten Fehler in der Konsole der Extension.
+  - [x] 2.3 Überprüfe `extension/public/manifest.json`, ob die Host-Permissions für den API-Aufruf zum Backend korrekt konfiguriert sind (bestätigt: bereits durch `/analyze` abgedeckt).
 
 - [ ] **3.0 Testing: Verify Backend and Frontend Integration**
   - [ ] 3.1 Führe manuelle End-to-End-Tests durch:

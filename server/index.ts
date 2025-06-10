@@ -441,11 +441,11 @@ app.use('*', cors({
     
     return ALLOWED_ORIGINS[0]; // Default to first origin if not in the list
   },
-  allowMethods: ['POST', 'OPTIONS'],
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   exposeHeaders: ['Content-Length'],
   maxAge: 86400,
-  credentials: true,
+  // credentials: true, // Temporarily removed for debugging
 }));
 
 // Health check endpoint

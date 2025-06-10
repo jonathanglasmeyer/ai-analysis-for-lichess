@@ -37,4 +37,20 @@ export default [
     ],
   },
   // Optional: Add popup.ts or other files if needed
+  {
+    input: 'src/popup/index.ts',
+    output: {
+      file: 'public/popup.js',
+      format: 'iife',
+      sourcemap: process.env.NODE_ENV !== 'production',
+    },
+    plugins: [
+      typescript({
+        tsconfig: 'tsconfig.json',
+      }),
+      nodeResolve(),
+      commonjs(),
+      process.env.NODE_ENV === 'production' && terser(),
+    ],
+  },
 ];

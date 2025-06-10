@@ -6,7 +6,7 @@
 // In einer Chrome Extension müssen wir einen anderen Ansatz verwenden, da process.env nicht verfügbar ist
 // Für die Produktion: Verwende den Hetzner-Server
 // Für die Entwicklung: Verwende localhost
-const IS_PRODUCTION = true; // Setze auf false für lokale Entwicklung
+const IS_PRODUCTION = false; // Setze auf false für lokale Entwicklung
 
 // Hetzner-Server-Domain hier einsetzen (ohne Protokoll)
 const HETZNER_DOMAIN = 'chess-analysis-api.quietloop.dev';
@@ -240,7 +240,10 @@ async function performAnalysis(pgn: string, locale?: string) {
           'Authorization': `Bearer ${API_KEY}`
         },
         body: JSON.stringify({ pgn, locale }),
-        signal: controller.signal
+        signal: controller.signal,
+        // Konsistent mit dem Popup für CORS-Handling
+        credentials: 'omit',
+        mode: 'cors'
       });
       
       console.log('Fetch completed successfully, status:', response.status);
