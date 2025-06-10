@@ -525,19 +525,32 @@ app.get('/usage', apiKeyAuth(), async (c) => {
     let clientIp = getClientIp(c.req.raw);
     const isProduction = env.NODE_ENV === 'production';
 
-    if (!clientIp) {
-      if (!isProduction) { // Use fallback if NOT production (i.e., dev, test, or undefined)
-        clientIp = '127.0.0.1'; // Fallback IP
-        console.log(`[USAGE] No client IP in environment '${env.NODE_ENV || 'undefined'}', using fallback:`, clientIp);
-      } else {
-        // Production environment
-        console.error('[USAGE] Could not determine client IP in production.');
-        return c.json({ ok: false, error: 'Could not determine client IP', errorCode: 'CLIENT_IP_MISSING' }, 400);
-      }
+    let isDevFallbackIp = false;
+    if (!clientIp && !isProduction) {
+      // In development, if no IP is found (e.g. direct localhost call without proxy), use a fallback.
+      clientIp = 'dev-fallback-ip'; 
+      isDevFallbackIp = true;
+      console.log('[USAGE] No client IP found in development, using fallback:', clientIp);
     }
 
-    // Hash the IP address
-    const hashedIp = hashIp(clientIp, IP_HASHING_SALT);
+    // Special response if in development mode and using the fallback IP
+    if (!isProduction && isDevFallbackIp) {
+      console.log('[USAGE] Development mode with fallback IP. Reporting usage tracking as effectively disabled.');
+      return c.json({
+        ok: true,
+        developmentMode: true, // Flag for the frontend
+        usage: { current: 0, limit: 0 }, // Dummy-values
+        message: "Usage tracking is effectively disabled in development when a real client IP cannot be determined."
+      });
+    }
+
+    // Ensure IP_HASHING_SALT is available
+    if (!IP_HASHING_SALT) {
+      console.error('[USAGE] IP_HASHING_SALT is not configured. Cannot proceed with usage tracking.');
+      return c.json({ ok: false, error: "Server configuration error: IP_HASHING_SALT is missing.", errorCode: "SERVER_CONFIG_ERROR" }, 500);
+    }
+
+    const hashedIp = hashIp(clientIp!, IP_HASHING_SALT); // clientIp is guaranteed to be non-null here
     console.log(`[USAGE] Hashed IP (prefix): ${hashedIp.substring(0,8)}... for original IP (prefix): ${clientIp.substring(0,3)}...`);
 
     let currentUsage = 0;

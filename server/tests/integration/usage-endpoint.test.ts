@@ -165,4 +165,22 @@ describe('/usage Endpoint Integration Tests', () => {
     expect(data.usage.limit).toBe(MAX_ANONYMOUS_ANALYSES);
   });
 
+  // Test 4.3.1: Development mode (no IP header) should return special dev mode response
+  test("4.3.1: Development mode (no IP header) should return special dev mode response", async () => {
+    // process.env.NODE_ENV is set to "test" globally for this file, which is not 'production'.
+    // This should trigger the dev-fallback-ip logic in the /usage endpoint when no IP headers are sent.
+
+    // No IP headers are sent with makeUsageRequest() by default when no specific headers are passed.
+    const response = await makeUsageRequest(); 
+    
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    
+    expect(data.ok).toBe(true);
+    expect(data.developmentMode).toBe(true);
+    expect(data.usage).toBeDefined();
+    expect(data.usage.current).toBe(0); // Dummy value as per implementation
+    expect(data.usage.limit).toBe(0);   // Dummy value as per implementation
+    expect(data.message).toContain("Usage tracking is effectively disabled"); 
+  });
 });

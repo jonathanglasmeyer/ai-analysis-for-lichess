@@ -22,7 +22,7 @@
   - [x] 1.1 In `server/index.ts`, definiere eine neue `GET`-Route `/usage`.
   - [x] 1.2 Implementiere die Handler-Logik für `/usage`:
     - [x] 1.2.1 Ermittle die Client-IP-Adresse (verwende `getClientIp` aus `ipUtils.ts`).
-    - [x] 1.2.2 Wenn keine IP ermittelt werden kann (und `NODE_ENV` nicht "development" ist), gib einen Fehler zurück (z.B. Status 400, `ok: false`, `error: "Could not determine client IP"`). Im Entwicklungsmodus die Fallback-IP verwenden.
+    - [x] 1.2.2 Wenn keine IP ermittelt werden kann (und `NODE_ENV` nicht "development" ist), gib einen Fehler zurück (z.B. Status 400, `ok: false`, `error: "Could not determine client IP"`). Das Verhalten im Entwicklungsmodus wird in Task 4.0 spezifiziert.
     - [x] 1.2.3 Hashe die IP-Adresse (verwende `hashIp` aus `ipUtils.ts` mit `IP_HASHING_SALT`).
     - [x] 1.2.4 Rufe die Nutzungsdaten aus Supabase ab (verwende `getUsage` aus `supabaseClient.ts` mit dem `hashedIp`).
     - [x] 1.2.5 Wenn der Benutzer nicht in Supabase existiert (neuer Benutzer), setze `current` auf 0.
@@ -57,3 +57,13 @@
     - [ ] 3.1.3 Öffne das Popup erneut: Der Zähler sollte inkrementiert sein (z.B. "Analysen: 1 von 5").
     - [ ] 3.1.4 Wiederhole, bis das Limit erreicht ist, und prüfe die Anzeige.
     - [ ] 3.1.5 Teste das Verhalten bei Serverfehlern (z.B. Server temporär stoppen und Popup öffnen): Es sollte die Fehlermeldung angezeigt werden.
+
+- [x] **4.0 Development Mode: Handle Skipped Usage Tracking**
+  - [x] 4.1 Backend (`server/index.ts` - `/usage` Endpoint):
+    - [ ] 4.1.1 Wenn `NODE_ENV` auf "development" steht UND das IP-Hashing/Tracking übersprungen wird (basierend auf der Logik in `getClientIp` oder einer expliziten Konfigurationsvariable wie `SKIP_IP_TRACKING_IN_DEV`):
+      - [x] 4.1.1.1 Gib eine spezielle Antwort zurück, z.B. `{ ok: true, usage: { current: 0, limit: 0 }, message: "Usage tracking is disabled in development mode." }` oder `{ ok: true, developmentMode: true, message: "Usage tracking is disabled in development mode." }`.
+  - [x] 4.2 Frontend (`extension/src/popup/index.ts`):
+    - [x] 4.2.1 Erkenne die spezielle Antwort vom Backend für den Entwicklungsmodus (z.B. anhand von `usage.limit === 0` oder dem `developmentMode: true` Flag).
+    - [x] 4.2.2 Wenn der Entwicklungsmodus ohne Tracking erkannt wird, zeige im `#usage-display` Element eine entsprechende Meldung an, z.B. "Nutzungs-Tracking im Entwicklungsmodus deaktiviert."
+  - [x] 4.3 Integrationstests (`server/tests/integration/usage-endpoint.test.ts`):
+    - [x] 4.3.1 Füge einen Testfall hinzu, der prüft, ob der `/usage` Endpoint im Entwicklungsmodus (mit geskipptem IP-Tracking) die erwartete spezielle Antwort zurückgibt.

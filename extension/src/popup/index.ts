@@ -15,6 +15,8 @@ interface UsageResponse {
   };
   error?: string;
   errorCode?: string;
+  developmentMode?: boolean; // NEU
+  message?: string;          // NEU (für die Dev-Mode-Nachricht vom Server)
 }
 
 /**
@@ -88,6 +90,14 @@ function updateUsageDisplay(data: UsageResponse): void {
     debugToUI('Usage display element not found');
     console.error('Usage display element not found');
     return;
+  }
+
+  // NEU: Prüfen auf developmentMode
+  if (data.developmentMode) {
+    usageDisplayElement.textContent = data.message || "Nutzungs-Tracking im Entwicklungsmodus deaktiviert.";
+    usageDisplayElement.style.color = '#888'; // Graue Farbe für Dev-Modus-Nachricht
+    debugToUI(`Development mode detected. Displaying message: ${usageDisplayElement.textContent}`);
+    return; // Frühzeitiger Ausstieg, da keine Nutzungsdaten angezeigt werden sollen
   }
 
   if (data.ok && data.usage) {
