@@ -32,12 +32,18 @@ export async function getUsage(userKey: string): Promise<UserUsageRow | null> {
     .single();
 
   // 'PGRST116' is the code for "No rows found", which is not an error in this case.
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching user usage:', error);
-    return null;
+  if (error) {
+    if (error.code === 'PGRST116') {
+      // Not found is a valid case, means new user, usage is 0.
+      return null;
+    } else {
+      // Any other error is a real database error.
+      console.error('Error fetching user usage:', error);
+      throw new Error(`Supabase DB error fetching usage: ${error.message || error.code || 'Unknown error'}`);
+    }
   }
 
-  return data;
+  return data; // data is UserUsageRow if found, or null if (somehow) error was null but data also null.
 }
 
 /**
@@ -111,5 +117,30 @@ export async function directUpdateUsage(
       
     return { data, error };
   }
+}
+
+/**
+ * Deletes a user usage record by their user_key (hashed IP).
+ * This is primarily intended for test cleanup.
+ * @param userKey The unique key for the user (e.g., hashed IP).
+ * @returns True if deletion was successful or user not found, false on error.
+ */
+export async function clearUserUsageByHashedIp(userKey: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('user_usage')
+    .delete()
+    .eq('user_key', userKey);
+
+  if (error) {
+    // 'PGRST116' (No rows found) is not an error for a delete operation in this context.
+    if (error.code === 'PGRST116') {
+      console.log(`[SupabaseClient] No user found with key ${userKey} to delete.`);
+      return true; 
+    }
+    console.error('Error deleting user usage by hashed IP:', error);
+    return false;
+  }
+  console.log(`[SupabaseClient] Successfully deleted user with key ${userKey}.`);
+  return true;
 }
 

@@ -6,7 +6,7 @@
 // In einer Chrome Extension müssen wir einen anderen Ansatz verwenden, da process.env nicht verfügbar ist
 // Für die Produktion: Verwende den Hetzner-Server
 // Für die Entwicklung: Verwende localhost
-const IS_PRODUCTION = false; // Setze auf false für lokale Entwicklung
+const IS_PRODUCTION = true; // Setze auf false für lokale Entwicklung
 
 // Hetzner-Server-Domain hier einsetzen (ohne Protokoll)
 const HETZNER_DOMAIN = 'chess-analysis-api.quietloop.dev';

@@ -519,6 +519,58 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
 });
 
 // Analyze endpoint
+// Endpoint to get current usage status
+app.get('/usage', apiKeyAuth(), async (c) => {
+  try {
+    let clientIp = getClientIp(c.req.raw);
+    const isProduction = env.NODE_ENV === 'production';
+
+    if (!clientIp) {
+      if (!isProduction) { // Use fallback if NOT production (i.e., dev, test, or undefined)
+        clientIp = '127.0.0.1'; // Fallback IP
+        console.log(`[USAGE] No client IP in environment '${env.NODE_ENV || 'undefined'}', using fallback:`, clientIp);
+      } else {
+        // Production environment
+        console.error('[USAGE] Could not determine client IP in production.');
+        return c.json({ ok: false, error: 'Could not determine client IP', errorCode: 'CLIENT_IP_MISSING' }, 400);
+      }
+    }
+
+    // Hash the IP address
+    const hashedIp = hashIp(clientIp, IP_HASHING_SALT);
+    console.log(`[USAGE] Hashed IP (prefix): ${hashedIp.substring(0,8)}... for original IP (prefix): ${clientIp.substring(0,3)}...`);
+
+    let currentUsage = 0;
+    try {
+      const usageData: UserUsageRow | null = await getUsage(hashedIp);
+
+      if (usageData) {
+        currentUsage = usageData.analysis_count;
+      } else {
+        // User not found (getUsage returned null), means usage is 0 (new user)
+        console.log(`[USAGE] No usage data found for hashed IP (prefix): ${hashedIp.substring(0,8)}..., assuming new user.`);
+        currentUsage = 0; // Explicitly set to 0, though it's already the default
+      }
+    } catch (dbError) {
+      // This catch block now specifically handles errors thrown by getUsage (actual DB errors)
+      console.error('[USAGE] Supabase error fetching usage:', dbError);
+      return c.json({ ok: false, error: 'Failed to fetch usage data due to a database error.', errorCode: 'USAGE_FETCH_FAILED_DB' }, 500);
+    }
+
+    return c.json({
+      ok: true,
+      usage: {
+        current: currentUsage,
+        limit: MAX_ANONYMOUS_ANALYSES,
+      },
+    });
+
+  } catch (error) {
+    console.error('[USAGE] Unexpected error in /usage handler:', error);
+    return c.json({ ok: false, error: 'An unexpected error occurred', errorCode: 'USAGE_UNEXPECTED_ERROR' }, 500);
+  }
+});
+
 app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
   try {
     // Extract and hash the client IP to create a unique user key for tracking usage
