@@ -25,10 +25,10 @@ interface UsageResponse {
  */
 function debugToUI(message: string): void {
   console.log('[DEBUG]', message);
-  const debugElement = document.getElementById('debug-output');
-  if (debugElement) {
-    debugElement.innerHTML += `<div>${message}</div>`;
-  }
+  // const debugElement = document.getElementById('debug-output');
+  // if (debugElement) {
+  //   debugElement.innerHTML += `<div>${message}</div>`;
+  // }
 }
 
 /**
@@ -127,20 +127,6 @@ function updateUsageDisplay(data: UsageResponse): void {
 // Initialize when popup is loaded
 document.addEventListener('DOMContentLoaded', async () => {
   debugToUI('Popup loaded, DOMContentLoaded fired');
-  
-  // Debug-Div einfügen für Entwicklungszwecke
-  const body = document.querySelector('body');
-  if (body) {
-    const debugDiv = document.createElement('div');
-    debugDiv.id = 'debug-output';
-    debugDiv.style.marginTop = '20px';
-    debugDiv.style.padding = '10px';
-    debugDiv.style.border = '1px solid #ccc';
-    debugDiv.style.fontSize = '12px';
-    debugDiv.style.overflow = 'auto';
-    body.appendChild(debugDiv);
-    debugToUI('Debug output initialized');
-  }
   
   const usageDisplayElement = document.getElementById('usage-display');
   
