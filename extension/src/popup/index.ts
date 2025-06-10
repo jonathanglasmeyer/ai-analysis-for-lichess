@@ -5,6 +5,8 @@
 
 // Import API key from environment or config
 import { SERVER_URL, CHESS_GPT_API_KEY } from '../config';
+import i18next from 'i18next';
+import { setupI18n } from '../i18n';
 
 // Interface for the usage data response
 interface UsageResponse {
@@ -83,6 +85,19 @@ async function fetchUsageData(): Promise<UsageResponse> {
 /**
  * Update the usage display with data or error message
  */
+/**
+ * Applies translations to all elements with a data-i18n attribute.
+ */
+function localizeHtml(): void {
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const key = element.getAttribute('data-i18n');
+    if (key) {
+      // Use innerHTML to allow for simple formatting tags in the future
+      element.innerHTML = i18next.t(key);
+    }
+  });
+}
+
 function updateUsageDisplay(data: UsageResponse): void {
   const usageDisplayElement = document.getElementById('usage-display');
   
@@ -94,7 +109,7 @@ function updateUsageDisplay(data: UsageResponse): void {
 
   // NEU: Prüfen auf developmentMode
   if (data.developmentMode) {
-    usageDisplayElement.textContent = data.message || "Nutzungs-Tracking im Entwicklungsmodus deaktiviert.";
+    usageDisplayElement.textContent = i18next.t('popup.devModeMessage');
     usageDisplayElement.style.color = '#888'; // Graue Farbe für Dev-Modus-Nachricht
     debugToUI(`Development mode detected. Displaying message: ${usageDisplayElement.textContent}`);
     return; // Frühzeitiger Ausstieg, da keine Nutzungsdaten angezeigt werden sollen
@@ -102,7 +117,7 @@ function updateUsageDisplay(data: UsageResponse): void {
 
   if (data.ok && data.usage) {
     const { current, limit } = data.usage;
-    usageDisplayElement.textContent = `Analysen: ${current} von ${limit}`;
+    usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
     debugToUI(`Updated display: Analysen ${current} von ${limit}`);
     
     // Optional: Style basierend auf der Nutzung
@@ -114,7 +129,15 @@ function updateUsageDisplay(data: UsageResponse): void {
       usageDisplayElement.style.color = '#629924'; // Grün für genügend verbleibende Analysen
     }
   } else {
-    usageDisplayElement.textContent = 'Fehler beim Laden der Nutzung';
+    if (data.errorCode === 'ERROR_NETWORK') {
+      usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
+    } else if (data.errorCode === 'ERROR_SERVER_STATUS' && data.error) {
+      // Extract status from 'Server responded with 500'
+      const status = data.error.split(' ').pop() || 'N/A';
+      usageDisplayElement.textContent = i18next.t('popup.errorServer', { status });
+    } else {
+      usageDisplayElement.textContent = data.error || i18next.t('error.unexpected');
+    }
     usageDisplayElement.style.color = '#d23333'; // Rot für Fehler
     
     // Logge den detaillierten Fehler
@@ -126,6 +149,9 @@ function updateUsageDisplay(data: UsageResponse): void {
 
 // Initialize when popup is loaded
 document.addEventListener('DOMContentLoaded', async () => {
+  setupI18n();
+  localizeHtml();
+
   debugToUI('Popup loaded, DOMContentLoaded fired');
   
   const usageDisplayElement = document.getElementById('usage-display');

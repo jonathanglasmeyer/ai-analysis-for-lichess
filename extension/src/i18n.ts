@@ -18,12 +18,19 @@ const resources = {
       'error.unexpected': 'Unexpected error during analysis',
       'error.noBackground': 'No response from background script',
       'error.noPGN': 'Could not find PGN',
+      'popup.title': 'AI Analysis for Lichess',
+      'popup.description': 'This extension integrates AI-powered chess analysis directly into Lichess.',
+      'popup.usageLoading': 'Loading usage...',
+      'popup.usageDisplay': 'Analyses: {{current}} of {{limit}}',
+      'popup.devModeMessage': 'Usage tracking is disabled in development mode.',
+      'popup.errorNetwork': 'Network error. Could not connect to server.',
+      'popup.errorServer': 'Server error (Status: {{status}}). Please try again later.'
     }
   },
   de: {
     translation: {
-      'analysis.title': 'AI Analyse',
-      'analysis.create': 'AI ANALYSE ERSTELLEN',
+      'analysis.title': 'KI Analyse',
+      'analysis.create': 'KI ANALYSE ERSTELLEN',
       'analysis.better': 'Besser:',
       'status.analyzing': 'Analysiere Partie...',
       'status.checkingCache': 'Prüfe Cache...',
@@ -37,6 +44,13 @@ const resources = {
       'error.unexpected': 'Unerwarteter Fehler bei der Analyse',
       'error.noBackground': 'Keine Antwort vom Hintergrundskript erhalten',
       'error.noPGN': 'Konnte keine PGN finden',
+      'popup.title': 'KI Analyse für Lichess',
+      'popup.description': 'Diese Extension integriert KI-gestützte Schachanalysen direkt in Lichess.',
+      'popup.usageLoading': 'Nutzung wird geladen...',
+      'popup.usageDisplay': 'Analysen: {{current}} von {{limit}}',
+      'popup.devModeMessage': 'Nutzungs-Tracking im Entwicklungsmodus deaktiviert.',
+      'popup.errorNetwork': 'Netzwerkfehler. Konnte keine Verbindung zum Server herstellen.',
+      'popup.errorServer': 'Serverfehler (Status: {{status}}). Bitte später erneut versuchen.'
     }
   },
   // Französisch
@@ -57,6 +71,13 @@ const resources = {
       'error.unexpected': 'Erreur inattendue pendant l’analyse',
       'error.noBackground': 'Aucune réponse du script d’arrière-plan',
       'error.noPGN': 'Impossible de trouver le PGN',
+      'popup.title': 'Analyse IA pour Lichess',
+      'popup.description': 'Cette extension intègre une analyse d\'échecs alimentée par l\'IA directement dans Lichess.',
+      'popup.usageLoading': 'Chargement de l\'utilisation...',
+      'popup.usageDisplay': 'Analyses : {{current}} sur {{limit}}',
+      'popup.devModeMessage': 'Le suivi de l\'utilisation est désactivé en mode développement.',
+      'popup.errorNetwork': 'Erreur réseau. Impossible de se connecter au serveur.',
+      'popup.errorServer': 'Erreur du serveur (Statut : {{status}}). Veuillez réessayer plus tard.'
     }
   },
   // Spanisch
@@ -77,6 +98,13 @@ const resources = {
       'error.unexpected': 'Error inesperado durante el análisis',
       'error.noBackground': 'Sin respuesta del script en segundo plano',
       'error.noPGN': 'No se pudo encontrar el PGN',
+      'popup.title': 'Análisis de IA para Lichess',
+      'popup.description': 'Esta extensión integra análisis de ajedrez con IA directamente en Lichess.',
+      'popup.usageLoading': 'Cargando uso...',
+      'popup.usageDisplay': 'Análisis: {{current}} de {{limit}}',
+      'popup.devModeMessage': 'El seguimiento de uso está deshabilitado en modo de desarrollo.',
+      'popup.errorNetwork': 'Error de red. No se pudo conectar al servidor.',
+      'popup.errorServer': 'Error del servidor (Estado: {{status}}). Por favor, inténtelo de nuevo más tarde.'
     }
   },
   // Italienisch
@@ -97,6 +125,13 @@ const resources = {
       'error.unexpected': 'Errore imprevisto durante l’analisi',
       'error.noBackground': 'Nessuna risposta dallo script in background',
       'error.noPGN': 'Impossibile trovare il PGN',
+      'popup.title': 'Analisi AI per Lichess',
+      'popup.description': 'Questa estensione integra l\'analisi scacchistica basata sull\'IA direttamente in Lichess.',
+      'popup.usageLoading': 'Caricamento utilizzo...',
+      'popup.usageDisplay': 'Analisi: {{current}} di {{limit}}',
+      'popup.devModeMessage': 'Il tracciamento dell\'utilizzo è disabilitato in modalità sviluppo.',
+      'popup.errorNetwork': 'Errore di rete. Impossibile connettersi al server.',
+      'popup.errorServer': 'Errore del server (Stato: {{status}}). Riprova più tardi.'
     }
   },
   // Polnisch
@@ -117,6 +152,13 @@ const resources = {
       'error.unexpected': 'Nieoczekiwany błąd podczas analizy',
       'error.noBackground': 'Brak odpowiedzi ze skryptu tła',
       'error.noPGN': 'Nie można znaleźć PGN',
+      'popup.title': 'Analiza AI dla Lichess',
+      'popup.description': 'To rozszerzenie integruje analizę szachową opartą na AI bezpośrednio w Lichess.',
+      'popup.usageLoading': 'Ładowanie użycia...',
+      'popup.usageDisplay': 'Analizy: {{current}} z {{limit}}',
+      'popup.devModeMessage': 'Śledzenie użycia jest wyłączone w trybie deweloperskim.',
+      'popup.errorNetwork': 'Błąd sieci. Nie można połączyć się z serwerem.',
+      'popup.errorServer': 'Błąd serwera (Status: {{status}}). Spróbuj ponownie później.'
     }
   },
   // Portugiesisch
@@ -137,6 +179,13 @@ const resources = {
       'error.unexpected': 'Erro inesperado durante a análise',
       'error.noBackground': 'Sem resposta do script de fundo',
       'error.noPGN': 'Não foi possível encontrar o PGN',
+      'popup.title': 'Análise de IA para Lichess',
+      'popup.description': 'Esta extensão integra a análise de xadrez com IA diretamente no Lichess.',
+      'popup.usageLoading': 'Carregando uso...',
+      'popup.usageDisplay': 'Análises: {{current}} de {{limit}}',
+      'popup.devModeMessage': 'O rastreamento de uso está desativado no modo de desenvolvimento.',
+      'popup.errorNetwork': 'Erro de rede. Não foi possível conectar ao servidor.',
+      'popup.errorServer': 'Erro do servidor (Status: {{status}}). Por favor, tente novamente mais tarde.'
     }
   },
   // Niederländisch
@@ -157,6 +206,13 @@ const resources = {
       'error.unexpected': 'Onverwachte fout tijdens analyse',
       'error.noBackground': 'Geen reactie van achtergrondscript',
       'error.noPGN': 'Kon geen PGN vinden',
+      'popup.title': 'AI Analyse voor Lichess',
+      'popup.description': 'Deze extensie voegt AI-schaakanalyse direct toe aan Lichess.',
+      'popup.usageLoading': 'Gebruik wordt geladen...',
+      'popup.usageDisplay': 'Analyses: {{current}} van {{limit}}',
+      'popup.devModeMessage': 'Gebruikers-tracking is uitgeschakeld in de ontwikkelaarsmodus.',
+      'popup.errorNetwork': 'Netwerkfout. Kon geen verbinding maken met de server.',
+      'popup.errorServer': 'Serverfout (Status: {{status}}). Probeer het later opnieuw.'
     }
   }
 };
