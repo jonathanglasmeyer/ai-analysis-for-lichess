@@ -2,6 +2,7 @@ import typescript from 'rollup-plugin-typescript2';
 import { nodeResolve } from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import terser from '@rollup/plugin-terser';
+import replace from '@rollup/plugin-replace';
 
 export default [
   {
@@ -12,6 +13,13 @@ export default [
       sourcemap: process.env.NODE_ENV !== 'production',
     },
     plugins: [
+      replace({
+        preventAssignment: true,
+        values: {
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+          'process.env.PROD_CHESS_GPT_API_KEY': JSON.stringify(process.env.PROD_CHESS_GPT_API_KEY || '')
+        }
+      }),
       typescript({
         tsconfig: 'tsconfig.json',
       }),
@@ -28,6 +36,13 @@ export default [
       sourcemap: process.env.NODE_ENV !== 'production',
     },
     plugins: [
+      replace({
+        preventAssignment: true,
+        values: {
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+          'process.env.PROD_CHESS_GPT_API_KEY': JSON.stringify(process.env.PROD_CHESS_GPT_API_KEY || '')
+        }
+      }),
       typescript({
         tsconfig: 'tsconfig.json',
       }),
@@ -45,6 +60,13 @@ export default [
       sourcemap: process.env.NODE_ENV !== 'production',
     },
     plugins: [
+      replace({
+        preventAssignment: true,
+        values: {
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+          'process.env.PROD_CHESS_GPT_API_KEY': JSON.stringify(process.env.PROD_CHESS_GPT_API_KEY || '')
+        }
+      }),
       typescript({
         tsconfig: 'tsconfig.json',
       }),

@@ -1,25 +1,10 @@
 /**
  * Background script for the ChessGPT Lichess Extension
  */
+import { SERVER_URL, CHESS_GPT_API_KEY } from './config';
 
-// API Endpoints - Konfigurierbar für verschiedene Umgebungen
-// In einer Chrome Extension müssen wir einen anderen Ansatz verwenden, da process.env nicht verfügbar ist
-// Für die Produktion: Verwende den Hetzner-Server
-// Für die Entwicklung: Verwende localhost
-const IS_PRODUCTION = false; // Setze auf false für lokale Entwicklung
-
-// Hetzner-Server-Domain hier einsetzen (ohne Protokoll)
-const HETZNER_DOMAIN = 'chess-analysis-api.quietloop.dev';
-
-const API_BASE = IS_PRODUCTION
-  ? `https://${HETZNER_DOMAIN}`
-  : 'http://localhost:3001';
-
-const CACHE_CHECK_ENDPOINT = `${API_BASE}/check-cache`;
-const ANALYZE_ENDPOINT = `${API_BASE}/analyze`;
-
-// API-Key für die Authentifizierung
-const API_KEY = 'chess-gpt-extension-key-2022';
+const CACHE_CHECK_ENDPOINT = `${SERVER_URL}/check-cache`;
+const ANALYZE_ENDPOINT = `${SERVER_URL}/analyze`;
 
 // Message handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -152,7 +137,7 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
         },
         body: JSON.stringify({ 
           pgn: normalizedPgn,
@@ -237,7 +222,7 @@ async function performAnalysis(pgn: string, locale?: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${API_KEY}`
+          'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
         },
         body: JSON.stringify({ pgn, locale }),
         signal: controller.signal,
