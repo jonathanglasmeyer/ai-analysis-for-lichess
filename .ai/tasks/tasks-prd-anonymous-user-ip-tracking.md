@@ -45,10 +45,14 @@
   - [x] 4.5 After a successful analysis, call `incrementOrInsertUsage` to update the user's analysis count.
   - [x] 4.6 Add robust error handling for all new database and utility calls.
 
-- [ ] **5.0 Integration Tests**
-  - [ ] 5.1 Create `server/tests/integration/analyze-ip-tracking.test.ts`.
-  - [ ] 5.2 Add a test case to verify that a user with no prior usage can get an analysis.
-  - [ ] 5.3 Add a test case to verify that the usage count is incremented after a successful analysis.
-  - [ ] 5.4 Add a test case to verify that a user who has reached the limit is blocked with a 429 error.
-  - [ ] 5.5 Add a test case to verify that a request without a client IP is rejected.
+- [x] **5.0 Prevent Usage Tracking for Development/Fallback IPs**
+  - [x] 5.1 In `server/index.ts`, modify the logic to skip usage tracking (both fetching `getUsage` and incrementing `directUpdateUsage`) if the `effectiveIp` is the development fallback IP (`127.0.0.1`).
+  - [x] 5.2 Ensure that this skipping logic is only active when `isDevelopment` is true, so that production behavior remains unchanged.
+
+- [ ] **6.0 Integration Tests**
+  - [ ] 6.1 Create `server/tests/integration/analyze-ip-tracking.test.ts`.
+  - [ ] 6.2 Add a test case to verify that a user with no prior usage can get an analysis.
+  - [ ] 6.3 Add a test case to verify that the usage count is incremented after a successful analysis.
+  - [ ] 6.4 Add a test case to verify that a user who has reached the limit is blocked with a 429 error.
+  - [ ] 6.5 Add a test case to verify that a request without a client IP is rejected (in production mode).
   - [ ] 6.2 Write integration tests for `/analyze` endpoint covering successful analysis, count increment, limit enforcement, and IP determination failure.

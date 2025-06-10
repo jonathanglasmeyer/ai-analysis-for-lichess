@@ -63,6 +63,7 @@ async function initializeServer() {
   console.log('Server components initialized successfully.');
 }
 
+// Stelle sicher, dass der Cache-Ordner existiert
 async function initializeCache() {
   try {
     await fs.mkdir(CACHE_DIR, { recursive: true });
@@ -539,6 +540,14 @@ app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
     const effectiveIp = clientIp || '127.0.0.1';
     console.log(`[ANALYZE] Using IP: ${clientIp ? 'Real client IP' : 'Development fallback IP'}`);
     
+    // Determine if usage should be tracked for this request
+    // Skip tracking for development fallback IP (127.0.0.1) in development mode
+    const shouldTrackUsage = !(isDevelopment && effectiveIp === '127.0.0.1');
+    
+    if (!shouldTrackUsage) {
+      console.log('[ANALYZE] Development mode with fallback IP detected, skipping usage tracking');
+    }
+    
     // Create a salted hash of the IP for anonymous tracking
     let userKey;
     try {
@@ -552,26 +561,25 @@ app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
       }, 500);
     }
     
-    // Fetch the current usage for this user from Supabase
-    try {
-      const usageData = await getUsage(userKey);
-      console.log(`[ANALYZE] Current usage for user: ${usageData?.analysis_count || 0}/${MAX_ANONYMOUS_ANALYSES}`);
-      
-      // Check if the user has exceeded their free analysis limit
-      if (usageData && usageData.analysis_count >= MAX_ANONYMOUS_ANALYSES) {
-        return c.json({
-          ok: false,
-          error: `You have reached the limit of ${MAX_ANONYMOUS_ANALYSES} free analyses. Please create an account for unlimited analyses.`,
-          errorCode: 'USAGE_LIMIT_EXCEEDED'
-        }, 429); // 429 Too Many Requests
+    // Fetch the current usage for this user from Supabase, if tracking is enabled
+    if (shouldTrackUsage) {
+      try {
+        const usage = await getUsage(userKey);
+        if (usage && usage.analysis_count >= MAX_ANONYMOUS_ANALYSES) {
+          console.log(`[ANALYZE] User ${userKey.substring(0,8)}... has reached the analysis limit.`);
+          return c.json({
+            ok: false,
+            error: `You have reached the limit of ${MAX_ANONYMOUS_ANALYSES} free analyses. Please create an account for unlimited analyses.`,
+            errorCode: 'USAGE_LIMIT_EXCEEDED'
+          }, 429); // Too Many Requests
+        }
+        console.log(`[ANALYZE] Current usage for ${userKey.substring(0,8)}...: ${usage?.analysis_count || 0} analyses`);
+      } catch (dbError) {
+        console.error('[ANALYZE] Failed to fetch usage data, proceeding without usage check:', dbError);
+        // Graceful degradation: If DB is down, allow analysis but log the error.
+        // This prevents the service from being entirely unavailable due to DB issues.
       }
-    } catch (dbError) {
-      // Log the error but continue - we don't want to block analysis if the DB check fails
-      console.error('[ANALYZE] Error checking usage:', dbError);
-      // Note: We intentionally don't return here to allow the analysis to proceed
-      // This is a graceful degradation strategy if the database is temporarily unavailable
     }
-    
     const body = await c.req.json<AnalyzeRequest>();
     const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';
     // Map locale to language name for system prompt
@@ -800,27 +808,29 @@ ${normalizedPgn}`;
       // Logging
       console.log(`Saved analysis to filesystem cache`);
       
-      // Increment usage count for this user after successful analysis
-      try {
-        console.log(`[ANALYZE] Attempting to increment usage for user_key: ${userKey.substring(0, 8)}...`);
-        const updateResult = await directUpdateUsage(userKey, true); // true indicates anonymous user
-        if (updateResult.error) {
-          console.error('[ANALYZE] Failed to increment usage count:', updateResult.error);
-          // In Entwicklung können wir trotzdem fortfahren - für Debugging-Zwecke
-          const errorCode = updateResult.error.code || 'unknown';
-          console.log(`[ANALYZE] Increment error code: ${errorCode}`);
-          
-          // Füge nur in der Entwicklung Debug-Informationen hinzu
-          if (isDevelopment) {
-            console.log(`[DEBUG] This is likely a SQL error in the Supabase stored procedure. ` +
-              `Check if column "user_key" is properly qualified in the function.`);
+      // Increment usage count for this user after successful analysis, if tracking is enabled
+      if (shouldTrackUsage) {
+        try {
+          console.log(`[ANALYZE] Attempting to increment usage for user_key: ${userKey.substring(0, 8)}...`);
+          const updateResult = await directUpdateUsage(userKey, true); // true indicates anonymous user
+          if (updateResult.error) {
+            console.error('[ANALYZE] Failed to increment usage count:', updateResult.error);
+            // In Entwicklung können wir trotzdem fortfahren - für Debugging-Zwecke
+            const errorCode = updateResult.error.code || 'unknown';
+            console.log(`[ANALYZE] Increment error code: ${errorCode}`);
+            
+            // Füge nur in der Entwicklung Debug-Informationen hinzu
+            if (isDevelopment) {
+              console.log(`[DEBUG] This is likely a SQL error in the Supabase stored procedure. ` +
+                `Check if column "user_key" is properly qualified in the function.`);
+            }
+          } else {
+            console.log(`[ANALYZE] Usage count updated: ${updateResult.data?.analysis_count || 'unknown'} analyses used`);
           }
-        } else {
-          console.log(`[ANALYZE] Usage count updated: ${updateResult.data?.analysis_count || 'unknown'} analyses used`);
+        } catch (incrementError) {
+          console.error('[ANALYZE] Error incrementing usage:', incrementError);
+          // Continue despite error - we don't want to block returning the analysis results
         }
-      } catch (incrementError) {
-        console.error('[ANALYZE] Error incrementing usage:', incrementError);
-        // Continue despite error - we don't want to block returning the analysis results
       }
       
       return c.json(response);
@@ -838,8 +848,7 @@ ${normalizedPgn}`;
   }
 });
 
-// Server already initialized at the top with initializeServer()
-
+// Start the server
 const port = parseInt(env.PORT || '3001');
 console.log(`Server is running on port ${port}`);
 
