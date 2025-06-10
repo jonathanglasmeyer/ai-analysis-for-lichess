@@ -37,18 +37,18 @@
   - [x] 3.3 Implement `incrementOrInsertUsage(userKey: string, isAnonymous: boolean): Promise<{ data: UserUsageRow | null, error: any }>` in `server/src/supabaseClient.ts`.
   - [x] 3.4 Create `server/src/supabaseClient.test.ts` with unit tests for `getUsage` and `incrementOrInsertUsage` (mocking Supabase client).
 
-- [ ] **4.0 Integrate IP Tracking and Usage Logic into `/analyze` Endpoint**
-  - [ ] 4.1 In `server/index.ts` (or `/analyze` handler):
-    *   Import and use `getClientIp`, `hashIp`, `getUsage`, `incrementOrInsertUsage`, and `IP_HASHING_SALT`.
-    *   Extract IP, generate `userKey`.
-    *   Fetch current usage, check limits (Task 5).
-    *   If allowed, proceed with analysis and then update usage.
-    *   Handle cases where IP cannot be determined (e.g., return error).
+- [x] **4.0 Integrate IP Tracking and Usage Logic into `/analyze` Endpoint**
+  - [x] 4.1 In `server/index.ts`, add the necessary imports for IP utils, Supabase client, and config.
+  - [x] 4.2 Inside the `/analyze` handler, implement the logic to get the client IP and generate the hashed `userKey`. Handle the case where the IP cannot be determined.
+  - [x] 4.3 Fetch the current usage for the `userKey` using `getUsage`.
+  - [x] 4.4 Add the `MAX_ANONYMOUS_ANALYSES` constant to `server/src/config.ts` and check if the user has exceeded the limit. If so, return a `429 Too Many Requests` error.
+  - [x] 4.5 After a successful analysis, call `incrementOrInsertUsage` to update the user's analysis count.
+  - [x] 4.6 Add robust error handling for all new database and utility calls.
 
-- [ ] **5.0 Enforce Analysis Limit for Anonymous Users**
-  - [ ] 5.1 Add `MAX_ANONYMOUS_ANALYSES = 5` to `server/src/config.ts`.
-  - [ ] 5.2 In `/analyze` endpoint logic: if `currentUserUsage.analysis_count >= MAX_ANONYMOUS_ANALYSES`, return 429 error.
-
-- [ ] **6.0 Integration Tests**
-  - [ ] 6.1 Create `server/tests/integration/analyze-ip-tracking.test.ts`.
+- [ ] **5.0 Integration Tests**
+  - [ ] 5.1 Create `server/tests/integration/analyze-ip-tracking.test.ts`.
+  - [ ] 5.2 Add a test case to verify that a user with no prior usage can get an analysis.
+  - [ ] 5.3 Add a test case to verify that the usage count is incremented after a successful analysis.
+  - [ ] 5.4 Add a test case to verify that a user who has reached the limit is blocked with a 429 error.
+  - [ ] 5.5 Add a test case to verify that a request without a client IP is rejected.
   - [ ] 6.2 Write integration tests for `/analyze` endpoint covering successful analysis, count increment, limit enforcement, and IP determination failure.

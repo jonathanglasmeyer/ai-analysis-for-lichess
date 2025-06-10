@@ -6,7 +6,9 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
-import { initializeDatabase } from './src/db'; // Corrected path if db.ts is in src/
+import { getClientIp, hashIp } from './src/utils/ip-utils';
+import { getUsage, directUpdateUsage, UserUsageRow } from './src/supabaseClient';
+import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES } from './src/config';
 import { apiKeyAuth } from './auth-middleware';
 import { Chess } from 'chess.js';
 
@@ -58,7 +60,6 @@ initializeServer();
 
 async function initializeServer() {
   await initializeCache(); // Initialize file system cache
-  initializeDatabase(); // Initialize SQLite database and tables (synchronous)
   console.log('Server components initialized successfully.');
 }
 
@@ -519,6 +520,58 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
 // Analyze endpoint
 app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
   try {
+    // Extract and hash the client IP to create a unique user key for tracking usage
+    const clientIp = getClientIp(c.req.raw);
+    
+    // For local development or testing, provide a default IP if none is found
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    
+    if (!clientIp && !isDevelopment) {
+      // In production, we require a valid client IP
+      console.error('[ANALYZE] No client IP could be determined');
+      return c.json({ 
+        ok: false, 
+        error: 'Could not determine client IP. Please ensure your request includes appropriate headers.' 
+      }, 400);
+    }
+    
+    // Use a placeholder IP for local development if no real IP is detected
+    const effectiveIp = clientIp || '127.0.0.1';
+    console.log(`[ANALYZE] Using IP: ${clientIp ? 'Real client IP' : 'Development fallback IP'}`);
+    
+    // Create a salted hash of the IP for anonymous tracking
+    let userKey;
+    try {
+      userKey = hashIp(effectiveIp, IP_HASHING_SALT || '');
+      console.log(`[ANALYZE] Request from hashed IP: ${userKey.substring(0, 8)}...`);
+    } catch (hashError) {
+      console.error('[ANALYZE] Failed to hash client IP:', hashError);
+      return c.json({ 
+        ok: false, 
+        error: 'Internal server error processing client identifier.' 
+      }, 500);
+    }
+    
+    // Fetch the current usage for this user from Supabase
+    try {
+      const usageData = await getUsage(userKey);
+      console.log(`[ANALYZE] Current usage for user: ${usageData?.analysis_count || 0}/${MAX_ANONYMOUS_ANALYSES}`);
+      
+      // Check if the user has exceeded their free analysis limit
+      if (usageData && usageData.analysis_count >= MAX_ANONYMOUS_ANALYSES) {
+        return c.json({
+          ok: false,
+          error: `You have reached the limit of ${MAX_ANONYMOUS_ANALYSES} free analyses. Please create an account for unlimited analyses.`,
+          errorCode: 'USAGE_LIMIT_EXCEEDED'
+        }, 429); // 429 Too Many Requests
+      }
+    } catch (dbError) {
+      // Log the error but continue - we don't want to block analysis if the DB check fails
+      console.error('[ANALYZE] Error checking usage:', dbError);
+      // Note: We intentionally don't return here to allow the analysis to proceed
+      // This is a graceful degradation strategy if the database is temporarily unavailable
+    }
+    
     const body = await c.req.json<AnalyzeRequest>();
     const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';
     // Map locale to language name for system prompt
@@ -747,6 +800,29 @@ ${normalizedPgn}`;
       // Logging
       console.log(`Saved analysis to filesystem cache`);
       
+      // Increment usage count for this user after successful analysis
+      try {
+        console.log(`[ANALYZE] Attempting to increment usage for user_key: ${userKey.substring(0, 8)}...`);
+        const updateResult = await directUpdateUsage(userKey, true); // true indicates anonymous user
+        if (updateResult.error) {
+          console.error('[ANALYZE] Failed to increment usage count:', updateResult.error);
+          // In Entwicklung können wir trotzdem fortfahren - für Debugging-Zwecke
+          const errorCode = updateResult.error.code || 'unknown';
+          console.log(`[ANALYZE] Increment error code: ${errorCode}`);
+          
+          // Füge nur in der Entwicklung Debug-Informationen hinzu
+          if (isDevelopment) {
+            console.log(`[DEBUG] This is likely a SQL error in the Supabase stored procedure. ` +
+              `Check if column "user_key" is properly qualified in the function.`);
+          }
+        } else {
+          console.log(`[ANALYZE] Usage count updated: ${updateResult.data?.analysis_count || 'unknown'} analyses used`);
+        }
+      } catch (incrementError) {
+        console.error('[ANALYZE] Error incrementing usage:', incrementError);
+        // Continue despite error - we don't want to block returning the analysis results
+      }
+      
       return c.json(response);
     } catch (anthropicError) {
       console.error('Anthropic API error:', anthropicError);
@@ -762,27 +838,7 @@ ${normalizedPgn}`;
   }
 });
 
-// Start the server
-// Helper function to initialize server components
-async function initializeServerComponents() {
-  await initializeCache(); // Initialize file system cache
-  try {
-    initializeDatabase(); // Initialize SQLite database and tables (this is synchronous)
-    console.log('Cache and Database initialized successfully.');
-  } catch (error) {
-    console.error('Failed to initialize database during server startup:', error);
-    // Depending on the application's needs, you might want to exit if DB is critical
-    // process.exit(1);
-  }
-}
-
-// Call initialization at the start
-initializeServerComponents().then(() => {
-  console.log('Server components initialization complete.');
-}).catch(error => {
-  console.error('Critical error during server components initialization:', error);
-  process.exit(1);
-});
+// Server already initialized at the top with initializeServer()
 
 const port = parseInt(env.PORT || '3001');
 console.log(`Server is running on port ${port}`);

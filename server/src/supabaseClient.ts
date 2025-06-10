@@ -64,3 +64,52 @@ export async function incrementOrInsertUsage(
   return { data, error };
 }
 
+/**
+ * Alternative implementation that directly works with the table instead of using RPC.
+ * This is a workaround for the SQL function issue.
+ */
+export async function directUpdateUsage(
+  userKey: string,
+  isAnonymous: boolean
+): Promise<{ data: UserUsageRow | null; error: any }> {
+  // Get the current timestamp
+  const now = new Date().toISOString();
+  
+  // First try to get existing record
+  const { data: existingData } = await supabase
+    .from('user_usage')
+    .select('*')
+    .eq('user_key', userKey)
+    .single();
+    
+  if (existingData) {
+    // Update existing record
+    const { data, error } = await supabase
+      .from('user_usage')
+      .update({
+        analysis_count: (existingData.analysis_count || 0) + 1,
+        last_analysis_timestamp: now
+      })
+      .eq('user_key', userKey)
+      .select()
+      .single();
+      
+    return { data, error };
+  } else {
+    // Insert new record
+    const { data, error } = await supabase
+      .from('user_usage')
+      .insert({
+        user_key: userKey,
+        is_anonymous: isAnonymous,
+        analysis_count: 1,
+        first_analysis_timestamp: now,
+        last_analysis_timestamp: now
+      })
+      .select()
+      .single();
+      
+    return { data, error };
+  }
+}
+
