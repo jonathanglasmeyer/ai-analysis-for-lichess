@@ -15,7 +15,7 @@ This document outlines the requirements for implementing a user authentication s
 
 -   already done: **As an anonymous user,** I want to be able to perform more than my 5 free anonymous analyses so that I can evaluate the extension's value.
 -   **As an anonymous user who has reached my limit,** I want to easily sign up for a free account so that I can continue using the service.
--   **As a registered user,** I want to log in to my account using my email or a social provider to access my analysis quota.
+-   **As a registered user,** I want to log in to my account using Google login to access my analysis quota.
 -   **As a logged-in user,** I want to see my logged-in status and my remaining analysis count within the popup, and I want a clear option to log out.
 
 ## 4. Functional Requirements
@@ -26,7 +26,6 @@ This document outlines the requirements for implementing a user authentication s
 
 2.  **User Registration (Sign-up and/or Login, should be combined ("Continue with Google" pattern)):**
     -   The popup UI must provide sign-up options for:
-        -   Email and Password.
         -   Social Logins supported by Supabase Auth (Google).
     -   Upon successful registration, the user is automatically logged in.
 
@@ -42,7 +41,7 @@ This document outlines the requirements for implementing a user authentication s
 ## 5. Non-Goals (Out of Scope)
 
 -   **Payment Integration:** The implementation of purchasing additional analysis packs is not part of this feature.
--   **Custom Password Reset Flow:** A custom UI for the "Forgot Password" flow is not required. We will rely on the default mechanism provided by Supabase.
+
 -   **Dedicated Profile Page:** All user-relevant information (email, analysis count) will be displayed directly in the popup. No separate profile page is needed.
 
 ## 6. Design & UI/UX Considerations
@@ -50,7 +49,7 @@ This document outlines the requirements for implementing a user authentication s
 -   The entire authentication flow (forms, buttons, status displays) will be integrated into the existing `popup.html`.
 -   The popup will manage several UI states:
     1.  **Anonymous State:** Shows usage count. If the limit is hit, it displays a login/sign-up prompt.
-    2.  **Auth Form State:** Shows forms for login and registration.
+    2.  **Auth State:** Shows a "Continue with Google" button.
     3.  **Logged-in State:** Shows user email, analysis count, and a logout button.
 -   The Social Login flow will likely trigger a new browser popup for the OAuth process, which is standard and acceptable.
 

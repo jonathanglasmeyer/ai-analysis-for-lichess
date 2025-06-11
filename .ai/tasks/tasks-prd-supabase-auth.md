@@ -25,21 +25,20 @@
   - [x] 1.3 Create a Supabase client instance, potentially in `extension/src/background.ts` or a dedicated `supabaseClient.ts` to be imported where needed.
   - [x] 1.4 Ensure Supabase client is initialized correctly when the extension starts.
 
-- [ ] 2.0 Implement UI for Anonymous User Limit and Login/Signup Prompt
+- [x] 2.0 Implement UI for Anonymous User Limit and Login/Signup Prompt
   - [x] 2.1 Modify `extension/src/popup/index.ts` to check if the anonymous user limit (5 analyses) is reached.
   - [x] 2.2 If limit is reached, don't perform further analyses in the Analysis tab, instead show a message to the user telling them to signup/signin via the extension popup window.
   - [x] 2.3 Display a clear message in `extension/public/popup.html` prompting the user to sign up or log in to continue, e.g., "You've used your 5 free analyses. Please sign up or log in to continue."
   - [x] 2.4 Add buttons/links for "Sign Up / Log In" that will lead to the auth forms (Task 3.0).
 
-- [ ] 3.0 Implement Registration and Login Flow (Email & Social)
-  - [ ] 3.1 Design and implement HTML forms in `extension/public/popup.html` for email/password sign-up and login.
-  - [ ] 3.2 Add "Continue with Google" button to `extension/public/popup.html`.
-  - [ ] 3.3 In `extension/src/popup/index.ts`, implement `handleEmailPasswordSignUp` function using `supabase.auth.signUp()`.
-  - [ ] 3.4 In `extension/src/popup/index.ts`, implement `handleEmailPasswordLogin` function using `supabase.auth.signInWithPassword()`.
-  - [ ] 3.5 In `extension/src/popup/index.ts`, implement `handleGoogleLogin` function using `supabase.auth.signInWithOAuth({ provider: 'google' })`.
-  - [ ] 3.6 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (store JWT, user data).
-  - [ ] 3.7 Implement error handling and display appropriate messages for auth failures (e.g., incorrect password, email already taken).
-  - [ ] 3.8 Upon successful login/registration, transition the UI to the logged-in state (Task 4.0).
+- [ ] 3.0 Implement "Continue with Google" Login Flow
+  - [ ] 3.1 Add a "Continue with Google" button to the UI in `extension/public/popup.html`.
+  - [ ] 3.2 Implement the logic in `extension/src/popup/index.ts` to handle the button click and initiate the Supabase social login (Google).
+  - [ ] 3.3 The Supabase client will handle the OAuth flow in a new browser popup.
+  - [ ] 3.4 Ensure errors from the OAuth flow are gracefully handled and displayed to the user.
+  - [ ] 3.5 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (store JWT, user data).
+  - [ ] 3.6 Implement error handling and display appropriate messages for auth failures.
+  - [ ] 3.7 Upon successful login, transition the UI to the logged-in state (Task 4.0).
 
 - [ ] 4.0 Implement Logged-in State UI in Popup
   - [ ] 4.1 In `extension/public/popup.html`, create a new UI section for the logged-in state.
