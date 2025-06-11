@@ -2,9 +2,8 @@
  * API Service for ChessGPT Lichess Extension
  */
 
-// API Endpoints
-const CACHE_CHECK_ENDPOINT = 'https://chessgpt.com/api/check-cache';
-const ANALYZE_ENDPOINT = 'https://chessgpt.com/api/analyze';
+
+
 
 export interface CacheCheckResponse {
   ok?: boolean;
@@ -37,6 +36,19 @@ export interface AnalysisResponse {
     summary?: string;
     moments?: AnalysisMoment[];
   };
+}
+
+// Interface for the usage data response
+export interface UsageResponse {
+  ok: boolean;
+  usage?: {
+    current: number;
+    limit: number;
+  };
+  error?: string;
+  errorCode?: string;
+  developmentMode?: boolean;
+  message?: string;
 }
 
 export interface AnalysisMoment {
@@ -113,6 +125,34 @@ export function requestAnalysis(pgn: string, locale?: string): Promise<AnalysisR
     } catch (error) {
       console.error('Error sending analysis request to background script:', error);
       resolve({ success: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript' });
+    }
+  });
+}
+
+/**
+ * Fetch the current usage data from the backend
+ */
+export function requestUsageData(): Promise<UsageResponse> {
+  return new Promise((resolve) => {
+    console.log('[API Service] Requesting usage data from background script.');
+    try {
+      chrome.runtime.sendMessage({ type: 'GET_USAGE' }, (response: UsageResponse) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error receiving usage data:', chrome.runtime.lastError.message);
+          resolve({ ok: false, error: 'Kommunikationsfehler mit der Erweiterung.' });
+          return;
+        }
+        if (!response) {
+          console.warn('Leere Antwort vom Hintergrundskript für GET_USAGE erhalten.');
+          resolve({ ok: false, error: 'Keine Antwort vom Hintergrundskript erhalten.' });
+          return;
+        }
+        console.log('[API Service] Received usage data:', response);
+        resolve(response);
+      });
+    } catch (error) {
+      console.error('Fehler beim Senden der GET_USAGE Nachricht:', error);
+      resolve({ ok: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript.' });
     }
   });
 }

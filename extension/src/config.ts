@@ -19,6 +19,12 @@ export const SERVER_URL = IS_PRODUCTION_BUILD
 // API-Key für die Authentifizierung (immer derselbe hartcodierte Wert)
 export const CHESS_GPT_API_KEY = 'chess-gpt-extension-key-2022';
 
+// Supabase Configuration
+// @ts-ignore: These placeholders are replaced by the build process.
+export const SUPABASE_URL = process.env.SUPABASE_URL;
+// @ts-ignore: These placeholders are replaced by the build process.
+export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
 // Maximale Anzahl anonymer Analysen (nur zur Anzeige, serverseitig erzwungen)
 export const MAX_ANONYMOUS_ANALYSES = 5;
 

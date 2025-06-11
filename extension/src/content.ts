@@ -6,9 +6,11 @@ import { waitForElement, analyzeDOM } from './utils/dom';
 import { setupI18n, observeLanguageChange, detectLichessLanguage, resolveLanguageForPrompt } from './i18n';
 import i18next from 'i18next';
 import { addTestButton } from './utils/test-launcher';
+// SERVER_URL and CHESS_GPT_API_KEY are used by fetchUsageData in api.ts
+// import { SERVER_URL, CHESS_GPT_API_KEY } from '../config'; // No longer needed directly here
 
 // Initialize i18n before any translations are used
-setupI18n();
+setupI18n(detectLichessLanguage());
 observeLanguageChange();
 console.log("CONTENT SCRIPT LOADED");
 
@@ -26,19 +28,19 @@ i18next.on('languageChanged', () => {
     analyzeButton.textContent = i18next.t('analysis.create');
   }
 });
+
+// Interface for the usage data response (copied from popup/index.ts)
 import { extractPgn } from './utils/pgn';
-import { requestCacheCheck, requestAnalysis, CacheCheckResponse } from './services/api';
-import { setupTabEventListeners, activateAiTab, activatePanel } from './components/tabs';
-import { createAnalyzeButton, displayAnalysisResult } from './components/analysis';
+import { requestAnalysis, requestUsageData, requestCacheCheck, CacheCheckResponse } from './services/api';
+import { setupTabEventListeners, activateAiTab } from './components/tabs'; // Removed activatePanel
+import { displayAnalysisResult } from './components/analysis'; // Removed createAnalyzeButton
 
 // Constants
-const LICHESS_SIDEBAR_SELECTOR = '.mchat';
 const LICHESS_TABS_SELECTOR = '.mchat__tabs';
 
-// Global variables
-let cachedResult: CacheCheckResponse | null = null;
-let isCacheCheckInProgress = false;
-let aiContentElement: HTMLElement | null = null;
+interface ChessGptCustomEventDetail {
+  container?: HTMLElement;
+}
 
 /**
  * Startet die Analyse einer Schachpartie
@@ -57,91 +59,99 @@ function showLoadingStatus(contentElement: HTMLElement) {
 }
 
 async function startAnalysis(contentElement: HTMLElement): Promise<void> {
-  // Extract PGN
-  const pgn = extractPgn();
-  // Detect locale (prefer i18next.language, fallback to detectLichessLanguage)
-  let detectedLocale = i18next.language;
-  if (!detectedLocale) {
-    detectedLocale = typeof detectLichessLanguage === 'function' ? detectLichessLanguage() : 'en';
-  }
-  
-  // Resolve locale to a supported language
-  const locale = resolveLanguageForPrompt(detectedLocale);
-  console.log('[ANALYSIS] Detected locale:', detectedLocale, '| Using locale:', locale);
+  showLoadingStatus(contentElement);
 
+  try {
+    console.log('[ContentScript] Querying for usage data.');
+    const usageData = await requestUsageData();
+
+    if (usageData.ok) {
+      if (usageData.developmentMode) {
+        console.log('[ContentScript] Development mode is active. Usage check skipped.');
+      } else if (usageData.usage && usageData.usage.current >= usageData.usage.limit) {
+        console.warn('[ContentScript] Analysis blocked: Usage limit reached.');
+        contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('popup.limitReachedMessage')}</div>`;
+        return;
+      }
+    } else {
+      // Handle cases where the request itself fails
+      console.error('[ContentScript] Failed to fetch usage data:', usageData.error);
+      contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${usageData.error || i18next.t('error.serverConnection')}</div>`;
+      return;
+    }
+  } catch (error) {
+    console.error('[ContentScript] Exception during usage check:', error);
+    contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.serverConnection')}</div>`;
+    return;
+  }
+
+  // If usage check passes, proceed with analysis
+  console.log('[ContentScript] Usage check passed. Proceeding with analysis.');
+
+  const pgn = extractPgn();
   if (!pgn) {
     contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.pgnExtract')}</div>`;
     return;
   }
 
-  // Exponential backoff retry logic for overloads
+  const detectedLocale = i18next.language || detectLichessLanguage() || 'en';
+  const locale = resolveLanguageForPrompt(detectedLocale);
+  console.log('[ANALYSIS] Detected locale:', detectedLocale, '| Using locale:', locale);
+
+  // Exponential backoff retry logic
   const maxRetries = 4;
   const initialDelay = 2000; // 2s
   let attempt = 0;
-  let delay = initialDelay;
 
   while (attempt <= maxRetries) {
-    showLoadingStatus(contentElement);
-    // Add retry info if not first try
     if (attempt > 0) {
-      contentElement.innerHTML += `<div style="margin-top: 12px; color: #805AD5; font-size: 0.95em;">Service überlastet, erneuter Versuch in <span id='retry-countdown'>${delay / 1000}</span>s...</div>`;
-      // Simple countdown for user feedback
+      const delay = initialDelay * Math.pow(2, attempt - 1);
+      const countdownElId = `retry-countdown-${Date.now()}`;
+      contentElement.innerHTML += `<div style="margin-top: 12px; color: #805AD5; font-size: 0.95em;">${i18next.t('error.serviceOverloaded')} <span id='${countdownElId}'>${delay / 1000}</span>s...</div>`;
+      
       let countdown = delay / 1000;
-      const countdownEl = contentElement.querySelector('#retry-countdown');
+      const countdownEl = contentElement.querySelector(`#${countdownElId}`);
       if (countdownEl) {
         const interval = setInterval(() => {
           countdown--;
-          countdownEl.textContent = countdown.toString();
+          if (countdownEl) {
+            countdownEl.textContent = countdown.toString();
+          }
           if (countdown <= 0) clearInterval(interval);
         }, 1000);
       }
       await new Promise(res => setTimeout(res, delay));
+    } else {
+        showLoadingStatus(contentElement);
     }
+
     const response = await requestAnalysis(pgn, locale);
     const data = response.data;
-    const hasOk = typeof data === 'object' && data !== null && 'ok' in data;
-    const hasError = typeof data === 'object' && data !== null && 'error' in data;
-    const hasDetails = typeof response === 'object' && response !== null && 'details' in response;
-    if (response.success && (!hasOk || (data as any).ok !== false)) {
-      // Analysis successful, display result
-      displayAnalysisResult(response.data, contentElement);
-      return;
+
+    if (response.success && data && data.ok) {
+      console.log('[ContentScript] Analysis successful.');
+      displayAnalysisResult(data, contentElement);
+      return; // Success, exit loop
+    }
+    
+    const errorMsg = data?.error || response.error || '';
+
+    if (errorMsg.includes('OVERLOADED') || errorMsg.includes('503')) {
+      attempt++;
+      console.warn(`[ContentScript] Analysis failed with overload, attempt ${attempt}/${maxRetries}.`);
+      if (attempt > maxRetries) {
+        contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${i18next.t('error.analysisFailedAfterRetries')}</div>`;
+        return;
+      }
     } else {
-      // Check for Anthropic overload error in multiple possible locations
-      let overloaded = false;
-      let details: string | undefined = undefined;
-      
-      // Check in response.details
-      if (hasDetails) {
-        details = (response as any).details;
-        overloaded = typeof details === 'string' && (details.includes('Overloaded') || details.includes('529'));
+      // Handle other errors (non-retriable)
+      let displayError = errorMsg || i18next.t('error.unknownAnalysisError');
+      if (displayError.includes('Failed to fetch') || displayError.includes('NetworkError')) {
+        displayError = i18next.t('error.serverUnreachable');
       }
-      
-      // Also check in error message
-      let errorMsg = response.error;
-      if (hasError) errorMsg = (data as any).error || errorMsg;
-      if (errorMsg && typeof errorMsg === 'string' && (errorMsg.includes('Overloaded') || errorMsg.includes('529'))) {
-        overloaded = true;
-      }
-      
-      if (overloaded && attempt < maxRetries) {
-        attempt++;
-        delay *= 2;
-        continue;
-      } else if (overloaded) {
-        const errorText = 'Der Analyse-Service ist aktuell überlastet. Bitte versuche es in ein paar Minuten erneut.';
-        contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${errorText}</div>`;
-        return;
-      } else {
-        if (!errorMsg) errorMsg = i18next.t('error.unknownAnalysisError');
-        // Fix network error messages
-        if (errorMsg.includes('Failed to fetch') || errorMsg.includes('NetworkError') || errorMsg.includes('network')) {
-          errorMsg = 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.';
-        }
-        // Analysis failed, display error message
-        contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${errorMsg}</div>`;
-        return;
-      }
+      console.error('[ContentScript] Analysis failed with non-retriable error:', displayError);
+      contentElement.innerHTML = `<div style="padding: 20px; color: #c33;">${displayError}</div>`;
+      return; // Exit loop on non-retriable error
     }
   }
 }
@@ -159,7 +169,7 @@ async function addAiAnalysisTab(): Promise<void> {
     
     // Event-Listener für den 'NEUE ANALYSE ERSTELLEN'-Button
     document.addEventListener('chess-gpt-start-analysis', (event: Event) => {
-      const customEvent = event as CustomEvent;
+      const customEvent = event as CustomEvent<ChessGptCustomEventDetail>; // Cast to CustomEvent with specific detail type
       const container = customEvent.detail?.container;
       
       if (container) {
@@ -220,7 +230,7 @@ async function addAiAnalysisTab(): Promise<void> {
     console.log('Added AI Analysis content panel');
     
     // Helper function to check cache status
-    async function checkCacheStatus(): Promise<any> {
+        async function checkCacheStatus(): Promise<CacheCheckResponse> {
       const pgn = extractPgn();
       if (!pgn) {
         return { ok: false, error: i18next.t('error.pgnExtract') };
@@ -290,7 +300,7 @@ async function addAiAnalysisTab(): Promise<void> {
         console.log('[TRACE] Cache check error, showing error message');
         let errMsg = cacheResult.error;
         if (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('network')) {
-          errMsg = i18next.t('Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.');
+          errMsg = i18next.t('error.serverUnreachable');
         }
         aiContent.innerHTML = `<div style="padding: 20px; color: #c33;">${errMsg}</div>`;
       } else {
@@ -317,3 +327,16 @@ if (document.readyState === 'complete') {
   console.log('Page already loaded, initializing ChessGPT extension...');
   addAiAnalysisTab();
 }
+
+
+
+// Listen for requests from the popup to get the page's language
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // Check if the message is from our extension
+  if (sender.id === chrome.runtime.id && request.type === 'GET_LANGUAGE') {
+    const lang = detectLichessLanguage();
+    console.log(`[ContentScript] Popup requested language. Responding with: ${lang}`);
+    sendResponse({ language: lang });
+    return true; // Keep the message channel open for the asynchronous response
+  }
+});

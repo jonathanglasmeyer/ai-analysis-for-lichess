@@ -2,11 +2,14 @@
 
 - `extension/src/popup/index.ts` - Main script for popup UI, will handle auth state and UI updates.
 - `extension/src/popup/index.html` - HTML structure for the popup, will need new elements for login/signup forms and logged-in state.
-- `extension/src/config.ts` - Configuration file, to store Supabase URL and Anon Key. => currently already available in server/.env
-- `extension/src/background.ts` - Background script, may need to assist with Supabase client initialization or token management.
+- `extension/src/config.ts` - Configuration file, updated to store Supabase URL and Anon Key, loaded via Rollup.
+- `extension/src/background.ts` - Background script, updated to import and log Supabase client, ensuring initialization.
+- `extension/src/supabaseClient.ts` - Initializes and exports the Supabase client instance.
 - `server/index.ts` - Backend server, needs to be updated to handle authenticated requests and link usage to user IDs.
 - `server/db/schema.ts` - Database schema, will need adjustments for user table and linking usage.
 - `extension/src/popup/popup.test.ts` - Unit tests for popup logic.
+- `extension/package.json` - Added @supabase/supabase-js dependency.
+- `extension/rollup.config.js` - Updated to inject Supabase URL/Anon Key and to resolve Supabase build issues (added json plugin, moduleContext, preferBuiltins).
 - `server/tests/integration/auth-endpoints.test.ts` - Integration tests for new/updated auth-related server endpoints.
 
 ### Notes
@@ -16,17 +19,17 @@
 
 ## Tasks
 
-- [ ] 1.0 Setup Supabase Client in Extension
-  - [ ] 1.1 Add `@supabase/supabase-js` package to `extension/package.json`.
-  - [ ] 1.2 Add Supabase URL and Anon Key to `extension/src/config.ts` (ensure they are loaded from environment variables during build if possible, or clearly documented for manual setup).
-  - [ ] 1.3 Create a Supabase client instance, potentially in `extension/src/background.ts` or a dedicated `supabaseClient.ts` to be imported where needed.
-  - [ ] 1.4 Ensure Supabase client is initialized correctly when the extension starts.
+- [x] 1.0 Setup Supabase Client in Extension
+  - [x] 1.1 Add `@supabase/supabase-js` package to `extension/package.json`.
+  - [x] 1.2 Add Supabase URL and Anon Key to `extension/src/config.ts` (ensure they are loaded from environment variables during build if possible, or clearly documented for manual setup).
+  - [x] 1.3 Create a Supabase client instance, potentially in `extension/src/background.ts` or a dedicated `supabaseClient.ts` to be imported where needed.
+  - [x] 1.4 Ensure Supabase client is initialized correctly when the extension starts.
 
 - [ ] 2.0 Implement UI for Anonymous User Limit and Login/Signup Prompt
-  - [ ] 2.1 Modify `extension/src/popup/index.ts` to check if the anonymous user limit (5 analyses) is reached.
-  - [ ] 2.2 If limit is reached, don't perform further analyses in the Analysis tab, instead show a message to the user telling them to signup/signin via the extension popup window.
-  - [ ] 2.3 Display a clear message in `extension/public/popup.html` prompting the user to sign up or log in to continue, e.g., "You've used your 5 free analyses. Please sign up or log in to continue."
-  - [ ] 2.4 Add buttons/links for "Sign Up / Log In" that will lead to the auth forms (Task 3.0).
+  - [x] 2.1 Modify `extension/src/popup/index.ts` to check if the anonymous user limit (5 analyses) is reached.
+  - [x] 2.2 If limit is reached, don't perform further analyses in the Analysis tab, instead show a message to the user telling them to signup/signin via the extension popup window.
+  - [x] 2.3 Display a clear message in `extension/public/popup.html` prompting the user to sign up or log in to continue, e.g., "You've used your 5 free analyses. Please sign up or log in to continue."
+  - [x] 2.4 Add buttons/links for "Sign Up / Log In" that will lead to the auth forms (Task 3.0).
 
 - [ ] 3.0 Implement Registration and Login Flow (Email & Social)
   - [ ] 3.1 Design and implement HTML forms in `extension/public/popup.html` for email/password sign-up and login.

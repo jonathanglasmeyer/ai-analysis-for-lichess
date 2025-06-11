@@ -2,6 +2,14 @@
  * Background script for the ChessGPT Lichess Extension
  */
 import { SERVER_URL, CHESS_GPT_API_KEY } from './config';
+import { supabase } from './supabaseClient';
+
+// Log Supabase client status on startup
+if (supabase) {
+  console.log('Supabase client initialized successfully in background script.');
+} else {
+  console.error('Supabase client failed to initialize in background script. Check config and Supabase status.');
+}
 
 const CACHE_CHECK_ENDPOINT = `${SERVER_URL}/check-cache`;
 const ANALYZE_ENDPOINT = `${SERVER_URL}/analyze`;
@@ -38,7 +46,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Indicates async response
   }
   
-  // Handle analysis requests
+  // Handle usage data requests
+  if (message.type === 'GET_USAGE') {
+    console.log('Background: Processing GET_USAGE request');
+    fetchUsageData().then(sendResponse);
+    return true; // Indicates asynchronous response
+  }
+
   if (message.type === 'ANALYZE_PGN') {
     console.log('Processing ANALYZE_PGN request');
     console.log('[LOCALE] Background received locale:', message.locale);
@@ -113,6 +127,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Indicates async response
   }
 });
+
+/**
+ * Fetches usage data from the server
+ */
+async function fetchUsageData() {
+  const usageUrl = `${SERVER_URL}/usage`;
+  console.log('Background: Fetching usage data from', usageUrl);
+  
+  try {
+    const response = await fetch(usageUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Background: HTTP error! status: ${response.status}`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('Background: Usage data fetched successfully:', data);
+    return data;
+  } catch (error) {
+    console.error('Background: Failed to fetch usage data:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: 'Serververbindung für Nutzungsdaten fehlgeschlagen', details: errorMessage };
+  }
+}
 
 /**
  * Checks if a PGN is in the cache
@@ -196,6 +242,7 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
  * Sends a PGN for analysis
  */
 async function performAnalysis(pgn: string, locale?: string) {
+
   console.log('Starting analysis process with endpoint:', ANALYZE_ENDPOINT);
   console.log('PGN length for analysis:', pgn.length, 'First 50 chars:', pgn.substring(0, 50));
   

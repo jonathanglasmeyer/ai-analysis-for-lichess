@@ -53,6 +53,13 @@
   
   <div class="status">
     <span id="usage-display" data-i18n="popup.usageLoading">Loading usage...</span>
+  </div> 
+
+  <!-- Limit reached prompt -->
+  <div id="limit-reached" style="display:none; margin-top:15px; text-align:center;">
+    <p data-i18n="popup.limitReachedMessage">You've used your 5 free analyses. Please sign up or log in to continue.</p>
+    <button id="sign-up-btn" class="button" data-i18n="popup.signUp">Sign Up</button>
+    <button id="login-btn" class="button" data-i18n="popup.logIn">Log In</button>
   </div>
   
   <script src="popup.js"></script>

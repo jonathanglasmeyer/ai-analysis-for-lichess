@@ -4,87 +4,11 @@
  */
 
 // Import API key from environment or config
-import { SERVER_URL, CHESS_GPT_API_KEY } from '../config';
+import { requestUsageData, UsageResponse } from '../services/api';
 import i18next from 'i18next';
+
 import { setupI18n } from '../i18n';
 
-// Interface for the usage data response
-interface UsageResponse {
-  ok: boolean;
-  usage?: {
-    current: number;
-    limit: number;
-  };
-  error?: string;
-  errorCode?: string;
-  developmentMode?: boolean; // NEU
-  message?: string;          // NEU (für die Dev-Mode-Nachricht vom Server)
-}
-
-/**
- * Debug-Hilfsfunktion, um alle wichtigen Informationen im UI anzuzeigen
- * (für Entwicklungszwecke, in Produktion auskommentieren)
- */
-function debugToUI(message: string): void {
-  console.log('[DEBUG]', message);
-  // const debugElement = document.getElementById('debug-output');
-  // if (debugElement) {
-  //   debugElement.innerHTML += `<div>${message}</div>`;
-  // }
-}
-
-/**
- * Fetch the current usage data from the backend
- */
-async function fetchUsageData(): Promise<UsageResponse> {
-  const apiUrl = `${SERVER_URL}/usage`;
-  debugToUI(`Fetching from URL: ${apiUrl}`);
-  debugToUI(`Using API Key: ${CHESS_GPT_API_KEY.substring(0, 3)}...`);
-  
-  try {
-    debugToUI('Starting fetch request...');
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${CHESS_GPT_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      // Wichtig für Extensions - keine Credentials senden
-      credentials: 'omit',
-      // CORS-Mode explizit setzen
-      mode: 'cors'
-    });
-
-    debugToUI(`Response status: ${response.status} ${response.statusText}`);
-    
-    if (!response.ok) {
-      debugToUI(`Error response: ${response.status}`);
-      console.error('Error fetching usage data:', response.status, response.statusText);
-      return { 
-        ok: false, 
-        error: `Server responded with ${response.status}`,
-        errorCode: 'ERROR_SERVER_STATUS'
-      };
-    }
-
-    const data = await response.json();
-    debugToUI(`Response data: ${JSON.stringify(data)}`);
-    return data;
-  } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-    debugToUI(`Fetch error: ${errorMsg}`);
-    console.error('Error fetching usage data:', error);
-    return { 
-      ok: false, 
-      error: errorMsg,
-      errorCode: 'ERROR_NETWORK'
-    };
-  }
-}
-
-/**
- * Update the usage display with data or error message
- */
 /**
  * Applies translations to all elements with a data-i18n attribute.
  */
@@ -98,89 +22,98 @@ function localizeHtml(): void {
   });
 }
 
-function updateUsageDisplay(data: UsageResponse): void {
-  const usageDisplayElement = document.getElementById('usage-display');
-  
-  if (!usageDisplayElement) {
-    debugToUI('Usage display element not found');
-    console.error('Usage display element not found');
-    return;
-  }
-
-  // NEU: Prüfen auf developmentMode
+function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElement, limitReachedElement: HTMLElement, statusDivElement: HTMLElement): void {
   if (data.developmentMode) {
-    usageDisplayElement.textContent = i18next.t('popup.devModeMessage');
-    usageDisplayElement.style.color = '#888'; // Graue Farbe für Dev-Modus-Nachricht
-    debugToUI(`Development mode detected. Displaying message: ${usageDisplayElement.textContent}`);
-    return; // Frühzeitiger Ausstieg, da keine Nutzungsdaten angezeigt werden sollen
+    usageDisplayElement.textContent = data.message || i18next.t('popup.devModeMessage');
+    usageDisplayElement.style.color = '#888';
+    statusDivElement.style.display = 'block'; // Ensure status div is visible
+    limitReachedElement.style.display = 'none';
+    return;
   }
 
   if (data.ok && data.usage) {
     const { current, limit } = data.usage;
     usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
-    debugToUI(`Updated display: Analysen ${current} von ${limit}`);
-    
-    // Optional: Style basierend auf der Nutzung
     if (current >= limit) {
-      usageDisplayElement.style.color = '#d23333'; // Rot für das Limit erreicht
-    } else if (current >= limit * 0.8) {
-      usageDisplayElement.style.color = '#e69f00'; // Orange für nahe am Limit
+      usageDisplayElement.style.display = 'none';
+      statusDivElement.style.display = 'none'; // Hide status div as well
+      limitReachedElement.style.display = 'block';
     } else {
-      usageDisplayElement.style.color = '#629924'; // Grün für genügend verbleibende Analysen
+      usageDisplayElement.style.display = 'block';
+      statusDivElement.style.display = 'block'; // Show status div
+      limitReachedElement.style.display = 'none';
     }
+  } else if (data.error) {
+    usageDisplayElement.textContent = data.error;
+    usageDisplayElement.style.color = '#c33';
+    statusDivElement.style.display = 'block'; // Ensure status div is visible for errors
   } else {
-    if (data.errorCode === 'ERROR_NETWORK') {
-      usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
-    } else if (data.errorCode === 'ERROR_SERVER_STATUS' && data.error) {
-      // Extract status from 'Server responded with 500'
-      const status = data.error.split(' ').pop() || 'N/A';
-      usageDisplayElement.textContent = i18next.t('popup.errorServer', { status });
-    } else {
-      usageDisplayElement.textContent = data.error || i18next.t('error.unexpected');
-    }
-    usageDisplayElement.style.color = '#d23333'; // Rot für Fehler
-    
-    // Logge den detaillierten Fehler
-    const errorDetails = data.error || 'Unknown error';
-    debugToUI(`Error in usage response: ${errorDetails}`);
-    console.error('Error in usage response:', errorDetails, data.errorCode || '');
+    usageDisplayElement.textContent = i18next.t('popup.errorServer', { status: 'N/A' });
+    usageDisplayElement.style.color = '#c33';
+    statusDivElement.style.display = 'block'; // Ensure status div is visible for errors
   }
 }
 
-// Initialize when popup is loaded
-document.addEventListener('DOMContentLoaded', async () => {
-  setupI18n();
+/**
+ * Initializes the popup's UI, sets up translations, and fetches usage data.
+ * This function is called after the correct language has been determined.
+ * @param language The language code (e.g., 'en', 'de') to use for translations.
+ */
+function initializePopup(language: string) {
+  setupI18n(language);
   localizeHtml();
 
-  debugToUI('Popup loaded, DOMContentLoaded fired');
-  
-  const usageDisplayElement = document.getElementById('usage-display');
-  
-  if (!usageDisplayElement) {
-    debugToUI('ERROR: Usage display element not found');
-    console.error('Usage display element not found');
+  const usageDisplayElement = document.getElementById('usage-display') as HTMLElement;
+  const limitReachedElement = document.getElementById('limit-reached') as HTMLElement;
+  const statusDivElement = document.querySelector('.status') as HTMLElement; // Get the parent status div
+  const signUpBtn = document.getElementById('sign-up-btn') as HTMLButtonElement;
+  const loginBtn = document.getElementById('login-btn') as HTMLButtonElement;
+
+  if (!usageDisplayElement || !limitReachedElement || !statusDivElement || !signUpBtn || !loginBtn) {
+    console.error('One or more popup elements are missing from the DOM.');
     return;
   }
-  
-  // Config-Werte ausgeben für Debugging
-  debugToUI(`SERVER_URL: ${SERVER_URL}`);
-  
-  // Initial loading state
-  usageDisplayElement.textContent = 'Nutzung wird geladen...';
-  debugToUI('Set initial loading state');
-  
-  try {
-    // Fetch and update usage data
-    debugToUI('Starting to fetch usage data...');
-    const usageData = await fetchUsageData();
-    debugToUI('Fetch complete, updating display...');
-    updateUsageDisplay(usageData);
-  } catch (finalError) {
-    debugToUI(`Fatal error: ${finalError instanceof Error ? finalError.message : String(finalError)}`);
-    const usageDisplayElement = document.getElementById('usage-display');
-    if (usageDisplayElement) {
-      usageDisplayElement.textContent = 'Kritischer Fehler beim Laden';
-      usageDisplayElement.style.color = '#d23333';
+
+  // Fetch and display usage data
+  requestUsageData()
+    .then((data: UsageResponse) => {
+      updateUsageDisplay(data, usageDisplayElement, limitReachedElement, statusDivElement);
+    })
+    .catch((error: Error) => {
+      console.error('Error fetching usage data:', error);
+      usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
+      usageDisplayElement.style.color = '#c33';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Query for the active tab to send a message to its content script
+  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+    const activeTab = tabs[0];
+    if (activeTab && activeTab.id) {
+      // Request the language from the content script
+      chrome.tabs.sendMessage(
+        activeTab.id,
+        { type: 'GET_LANGUAGE' },
+        response => {
+          // Check for errors, like the content script not being injected
+          if (chrome.runtime.lastError) {
+            console.warn(
+              `Could not get language from content script: ${chrome.runtime.lastError.message}. Defaulting to English. This is expected on non-Lichess pages.`
+            );
+            initializePopup('en');
+          } else if (response && response.language) {
+            console.log(`[Popup] Received language: ${response.language}. Initializing...`);
+            initializePopup(response.language);
+          } else {
+            console.warn('Received no or invalid response from content script. Defaulting to English.');
+            initializePopup('en');
+          }
+        }
+      );
+    } else {
+      console.error('Could not find active tab. Defaulting to English.');
+      initializePopup('en');
     }
-  }
+  });
 });

@@ -60,7 +60,7 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
           normalized.summary = jsonObject.summary;
         }
       }
-    } catch (e) {
+    } catch {
       // Bei Fehler: Formatiere die Summary als einfaches Markdown
       normalized.summary = normalized.summary
         .replace(/```json\n|```/g, '')
@@ -69,27 +69,8 @@ export function normalizeAnalysisData(response: any): NormalizedAnalysisData {
     }
   }
   
-  // Debug-Logs wurden entfernt
-  
   return normalized;
 }
-
-// Stil-Konstanten für einheitliches Design
-const styles = {
-  container: `margin: 0; padding: 10px;`,
-  emptyState: `color: #666; text-align: center; padding: 20px 0;`,
-  infoText: `margin-top: 15px; font-size: 0.9em; color: #666;`,
-  summaryContainer: `
-    max-height: calc(100vh - 120px); 
-    overflow-y: auto; 
-    font-size: 95%; 
-    white-space: pre-line; 
-    padding-right: 8px;
-    padding-bottom: 10px;
-    margin: 0;
-    overflow-wrap: break-word;
-  `
-};
 
 /**
  * Konvertiert Zugnotationen in klickbare Links
@@ -172,8 +153,7 @@ function convertMovesToLinks(text: string): HTMLDivElement {
     moveLink.dataset.notation = match.notation;
     
     // Verhindere Standard-Link-Verhalten
-    moveLink.addEventListener('click', (e) => {
-      e.preventDefault();
+    moveLink.addEventListener('click', () => {
       navigateToMove(match.moveNumber, match.isWhite, match.notation);
     });
     
@@ -222,7 +202,6 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         if (sanNode) {
           // Wenn ein <san> Element vorhanden ist, verwende dessen Text
           currentNotation = sanNode.textContent?.trim() || '';
-          // Debug-Log entfernt
         } else {
           // Fallback: Verwende den gesamten Text des move-Elements
           currentNotation = moveEl.textContent?.trim() || '';
@@ -239,12 +218,9 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         
         // Vergleiche die normalisierten Notationen
         if (normalizedCurrentNotation !== normalizedTargetNotation) {
-          // Debug-Log entfernt
           continue;
         }
         
-        // Debug-Log entfernt
-
         // Find the preceding 'index' element to get the move number
         let prevSibling = moveEl.previousElementSibling;
         let currentMoveListNumber = '';
@@ -254,7 +230,6 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
         while (prevSibling) {
           if (prevSibling.tagName.toLowerCase() === 'index') {
             currentMoveListNumber = (prevSibling.textContent?.match(/^(\d+)/) || [])[1] || '';
-            // Debug-Log entfernt
             
             // Prüfe, ob es sich um einen schwarzen Zug handelt, indem wir nach einem leeren move-Element suchen
             const emptyMove = prevSibling.nextElementSibling;
@@ -263,7 +238,6 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
                 emptyMove.textContent?.includes('...')) {
               // Es ist ein schwarzer Zug
               isCurrentMoveWhite = false;
-              // Debug-Log entfernt
             } else {
               // Es ist ein weißer Zug oder ein anderer Fall
               // Determine color: if moveEl is the first 'move' after 'index', it's white's move.
@@ -278,11 +252,9 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
               }
               if (siblingAfterIndex === moveEl && moveCountAfterIndex === 0) {
                 isCurrentMoveWhite = true;
-                // Debug-Log entfernt
               }
               if (siblingAfterIndex === moveEl && moveCountAfterIndex === 1) {
                 isCurrentMoveWhite = false;
-                // Debug-Log entfernt
               }
             }
             break;
@@ -323,7 +295,6 @@ function navigateToMove(moveNumber: string | undefined, isWhite: boolean, notati
     console.error('Error navigating to move:', error);
   }
 }
-
 
 // Track corrections for debugging
 interface MomentCorrection {
@@ -1087,13 +1058,10 @@ export function injectAICommentStyles(): void {
   observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 }
 
-
 /**
  * Inserts an AI comment into an element
  */
 export function insertAIComment(element: HTMLElement, moment: AnalysisMoment): void {
-  // Debug-Logs wurden entfernt
-  
   const commentHTML = `
     ${moment.comment || ''}
   `;
@@ -1120,7 +1088,6 @@ export function displayAnalysisResult(result: any, container: HTMLElement): void
   container.style.flexDirection = 'column';
 
   const content = document.createElement('div');
-  content.className = 'chess-gpt-analysis-content';
   content.style.padding = '0';
   content.style.margin = '0';
   content.style.flex = '1';

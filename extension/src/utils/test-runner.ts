@@ -4,18 +4,46 @@
 
 import { runAllTests, runComponentTests } from '../tests/run-tests';
 
+// Define types for the test runner functions and the object attached to window
+interface ChessGPTTestRunnerFunctions {
+  runAll: () => void;
+  runComponent: (componentName: string) => void;
+  highlightMoves: () => void;
+}
+
+interface ChessGPTExtensionFeatures {
+  tests: ChessGPTTestRunnerFunctions;
+  // Add other top-level properties of window.chessGPT here if they are known and fixed
+}
+
+declare global {
+  interface Window {
+    // Augment the Window interface to include chessGPT
+    // It can have 'tests' and any other properties (to match original spread behavior)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    chessGPT: Partial<ChessGPTExtensionFeatures> & { [key: string]: any };
+  }
+}
+
 /**
  * Globale Testfunktion, die im window-Objekt verfügbar gemacht wird
  */
 export function setupTestRunner(): void {
   // Füge die Testfunktionen zum window-Objekt hinzu, damit sie über die Konsole aufgerufen werden können
-  (window as any).chessGPT = {
-    ...(window as any).chessGPT,
-    tests: {
+  // Ensure window.chessGPT exists as an object and is compatible with our type.
+  // This handles cases where window.chessGPT is undefined, null, or not an object.
+  if (typeof window.chessGPT !== 'object' || window.chessGPT === null) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.chessGPT = {} as { [key: string]: any }; // Initialize as an empty object compatible with the type
+  }
+
+  window.chessGPT = {
+    ...window.chessGPT, // Spread existing properties from window.chessGPT
+    tests: { // Add or overwrite the 'tests' property with our typed functions
       runAll: runAllTests,
       runComponent: runComponentTests,
-      highlightMoves: () => runComponentTests('highlight-moves')
-    }
+      highlightMoves: () => runComponentTests('highlight-moves'),
+    },
   };
   
   console.log('🧪 ChessGPT Test Runner wurde initialisiert');
