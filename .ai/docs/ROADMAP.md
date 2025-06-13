@@ -58,6 +58,9 @@ popup.limitReachedMessage Nicht übersetzt.
 - [ ]  Invertiere die Analyse-Anzeige, indem du noch verfügbare Analysen anzeigst. 
 - [ ]  Better pop-up UX & UI
 
+### Login / Token Transfer
+- [ ]  Handle a case where I did a migration once and then I'm logging in from another computer. Ensure that the tokens from this anonymous account don't override the tokens stored for the user account. If a migration happened at one point, they will not be the second migration. 
+
 # Post-MVP Ideas
 - [ ]  Customizing prompt, Prompt Presets
 - [ ]  How to make it work in other views, like study & Analyse Board

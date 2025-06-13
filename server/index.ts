@@ -7,13 +7,15 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
 import { getClientIp, hashIp } from './src/utils/ip-utils';
-import { getUsage, directUpdateUsage } from './src/supabaseClient'; // UserUsageRow entfernt
-import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES, MAX_AUTHENTICATED_ANALYSES } from './src/config';
-import type { User } from '@supabase/supabase-js'; // Import User type
+import { getUsage, directUpdateUsage, ensureUserUsageRecordExists, migrateUsage } from './src/supabaseClient'; // ensureUserUsageRecordExists und migrateUsage hinzugefügt, UserUsageRow entfernt
+import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES, MAX_AUTHENTICATED_ANALYSES } from './src/config'; // MAX_AUTHENTICATED_ANALYSES hinzugefügt
+import type { User } from '@supabase/supabase-js'; // User Typ hinzugefügt
 import { apiKeyAuth } from './auth-middleware';
-import { createMiddleware } from 'hono/factory'; // Für die Middleware-Erstellung
-import { supabase } from './src/supabaseClient';   // Supabase Client für die Authentifizierung
-import { Chess } from 'chess.js';
+import { createMiddleware } from 'hono/factory';
+import { supabase } from './src/supabaseClient';
+import { Chess } from 'chess.js'; // Added: Import Chess for PGN validation and move generation
+
+const DEV_FALLBACK_IP = 'dev-fallback-ip'; // Diese Konstante wieder hinzufügen
 
 // Types
 interface AnalyzeRequest {
@@ -42,12 +44,6 @@ interface CheckCacheRequest {
   locale?: string;
 }
 
-interface CheckCacheResponse {
-  inCache: boolean;
-  // Wenn im Cache, senden wir die Analyse direkt zurück
-  analysis?: AnalyzeResponse;
-}
-
 // Cache für PGN-Analysen
 interface CacheEntry {
   timestamp: number;
@@ -68,7 +64,6 @@ const jwtAuthMiddleware = createMiddleware(async (c, next) => {
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.substring(7); // Entferne "Bearer "
-    console.log('[AUTH_DEBUG] Token to verify with Supabase:', token); // Log den Token
     try {
       const { data: userData, error: authError } = await supabase.auth.getUser(token);
       if (authError) {
@@ -478,11 +473,9 @@ app.use('*', cors({
   allowHeaders: ['Content-Type', 'Authorization'],
   exposeHeaders: ['Content-Length'],
   maxAge: 86400,
-  // credentials: true, // Temporarily removed for debugging
+  credentials: true,
 }));
 
-// Global API Key Authentication, vor JWT Auth, damit User-Objekt nicht überschrieben wird, falls beide Keys da sind
-app.use('*', apiKeyAuth()); 
 // JWT Auth Middleware für alle Routen
 app.use('*', jwtAuthMiddleware);
 
@@ -492,7 +485,7 @@ app.get('/', (c) => {
 });
 
 // Cache-Check Endpoint
-app.post('/check-cache', async (c) => {
+app.post('/check-cache', apiKeyAuth(), async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
     console.log('[LOCALE] Cache check received locale:', body.locale);
@@ -555,206 +548,248 @@ app.post('/check-cache', async (c) => {
     return c.json({ inCache: false, error: 'Invalid request' }, 400);
   }
 });
+
+// Analyze endpoint
 // Endpoint to get current usage status
-app.get('/usage', async (c) => {
+app.get('/usage', apiKeyAuth(), async (c) => {
   try {
     const authenticatedUser = c.get('user') as User | null;
+    let clientIp = getClientIp(c.req.raw); // clientIp hier holen
+    const isProduction = env.NODE_ENV === 'production';
+
     let userKeyForUsage: string;
     let isAnonymousUsage = true;
+    let currentLimit = MAX_ANONYMOUS_ANALYSES;
 
     if (authenticatedUser && authenticatedUser.id) {
-      userKeyForUsage = authenticatedUser.id;
-      isAnonymousUsage = false;
-      console.log(`[USAGE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check.`);
+        userKeyForUsage = authenticatedUser.id;
+        isAnonymousUsage = false;
+        currentLimit = MAX_AUTHENTICATED_ANALYSES;
+        console.log(`[USAGE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check.`);
+        // Migration logic removed, will be handled by a dedicated POST endpoint
     } else {
-      let clientIp = getClientIp(c.req.raw);
-      const isProduction = env.NODE_ENV === 'production';
+        // Anonymer Nutzer oder Dev Fallback
+        if (!isProduction && (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1')) {
+            clientIp = DEV_FALLBACK_IP; // Die Konstante verwenden
+            console.log('[USAGE] Development mode (anonymous): Using DEV_FALLBACK_IP for usage check.');
+        }
 
-      if (!isProduction && (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1')) {
-        clientIp = 'dev-fallback-ip';
-        console.log('[USAGE] Development mode (anonymous): Using fallback IP for usage check.');
-      }
+        if (!clientIp) {
+            console.warn('[USAGE] Anonymous user: Client IP could not be determined.');
+            return c.json({ ok: false, error: 'Client IP could not be determined for anonymous user.' }, 400);
+        }
 
-      if (!clientIp) {
-        console.warn('[USAGE] Anonymous user: Client IP could not be determined.');
-        return c.json({ ok: false, error: 'Client IP could not be determined for anonymous user.' }, 400);
-      }
+        if (!IP_HASHING_SALT) {
+            console.error('[USAGE] IP_HASHING_SALT is not configured. Cannot proceed with usage tracking.');
+            return c.json({ ok: false, error: "Server configuration error: IP_HASHING_SALT is missing.", errorCode: "SERVER_CONFIG_ERROR" }, 500);
+        }
+        
+        const ipHash = hashIp(clientIp, IP_HASHING_SALT);
+        userKeyForUsage = ipHash;
+        console.log(`[USAGE] Anonymous user. Using IP: ${clientIp}. Hashed IP for usage check: ${userKeyForUsage.substring(0, 8)}...`);
 
-      const ipHash = hashIp(clientIp, IP_HASHING_SALT);
-      userKeyForUsage = ipHash;
-
-      if (!isProduction && userKeyForUsage === hashIp('dev-fallback-ip', IP_HASHING_SALT)) {
-        console.log('[USAGE] Development mode with fallback IP (anonymous): Usage tracking effectively disabled.');
-        return c.json({
-          ok: true,
-          developmentMode: true,
-          usage: { current: 0, limit: 0 },
-          message: "Usage tracking is effectively disabled in development when a real client IP cannot be determined."
-        });
-      }
-      console.log(`[USAGE] Anonymous user. Using IP Hash for usage check: ${userKeyForUsage.substring(0, 8)}...`);
+        if (clientIp === DEV_FALLBACK_IP) {
+            console.log('[USAGE] Development mode: DEV_FALLBACK_IP. Ensuring DB record and showing actual usage data.');
+            await ensureUserUsageRecordExists(ipHash, true); // true für anonym
+        }
     }
 
+    // Tatsächliche Nutzungsdaten abrufen
     const usageData = await getUsage(userKeyForUsage);
-
+    let currentUsage = 0;
     if (usageData) {
-      return c.json({
-        ok: true,
-        usage: {
-          current: usageData.analysis_count,
-          limit: isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES
-        }
-      });
+        currentUsage = usageData.analysis_count;
     } else {
-      // User not found (getUsage returned null), means usage is 0 (new user)
-      console.log(`[USAGE] No usage data found for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0,8)}..., assuming new user.`);
-      return c.json({
+        console.log(`[USAGE] No usage data found for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0,8)}..., assuming new user.`);
+    }
+
+    // Frontend-Hinweis für DEV_FALLBACK_IP, aber mit echten Daten
+    const devModeResponsePart = (!isProduction && clientIp === DEV_FALLBACK_IP && isAnonymousUsage) 
+        ? { developmentModeHint: true, message: "Displaying actual usage for DEV_FALLBACK_IP." }
+        : {};
+
+    return c.json({
         ok: true,
         usage: {
-          current: 0,
-          limit: isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES
-        }
-      });
+            current: currentUsage,
+            limit: currentLimit
+        },
+        ...devModeResponsePart
+    });
+
+} catch (error) { // Combined error handling for DB or other issues
+    console.error('[USAGE] Unexpected error in /usage handler:', error);
+    // Check if it's a DB specific error if needed, otherwise generic
+    if (error.code && error.message) { // Basic check for Supabase/PostgREST error structure
+         console.error('[USAGE] Supabase error details:', JSON.stringify(error));
+         return c.json({ ok: false, error: 'Failed to fetch usage data due to a database issue.', errorCode: 'USAGE_FETCH_FAILED_DB' }, 500);
+    }
+    return c.json({ ok: false, error: 'An unexpected error occurred in /usage.', errorCode: 'USAGE_UNEXPECTED_ERROR' }, 500);
+}
+});
+
+// Endpoint to explicitly trigger usage migration
+app.post('/usage/migrate', jwtAuthMiddleware, apiKeyAuth(), async (c) => {
+  try {
+    const authenticatedUser = c.get('user') as User | null;
+
+    if (!authenticatedUser || !authenticatedUser.id) {
+      console.log('[MIGRATE] User not authenticated.');
+      return c.json({ ok: false, error: 'User not authenticated.' }, 401);
+    }
+
+    const userId = authenticatedUser.id;
+    const clientIpForHashing: string | undefined = getClientIp(c.req.raw);
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    let ipToUseForHash: string;
+
+    if (isDevelopment && (!clientIpForHashing || clientIpForHashing === '127.0.0.1' || clientIpForHashing === '::1')) {
+      console.log(`[MIGRATE] User ${userId}: Development mode - No real IP or localhost, using DEV_FALLBACK_IP: ${DEV_FALLBACK_IP} for source hash.`);
+      ipToUseForHash = DEV_FALLBACK_IP;
+    } else if (!clientIpForHashing) {
+      console.warn(`[MIGRATE] User ${userId}: Could not determine client IP for migration source and not in dev fallback. Migration might not find relevant anonymous usage.`);
+      // Proceeding, but migrateUsage might find nothing if the original anonymous IP was different and not dev_fallback
+      // For the user's current simplified scenario, this path is less critical.
+      // If we wanted to be strict, we could return an error here if !isDevelopment.
+      // However, if an anonymous user used a real IP, and then logs in from the same real IP, this should still work.
+      return c.json({ ok: false, error: 'Could not determine source IP for migration and not in development fallback.' }, 400); 
+    } else {
+      ipToUseForHash = clientIpForHashing;
+    }
+
+    const ipHashToMigrate = await hashIp(ipToUseForHash, IP_HASHING_SALT);
+    console.log(`[MIGRATE] User ${userId}: Determined source IP hash for migration as ${ipHashToMigrate.substring(0,8)}... (based on current request IP/fallback). Attempting migration.`);
+
+    try {
+      const migrationSuccess = await migrateUsage(userId, ipHashToMigrate);
+
+      if (migrationSuccess) {
+        console.log(`[MIGRATE] User ${userId}: Successfully migrated usage from IP hash ${ipHashToMigrate.substring(0,8)}...`);
+        return c.json({ ok: true, message: 'Usage successfully migrated.' });
+      } else {
+        console.log(`[MIGRATE] User ${userId}: Migration from IP hash ${ipHashToMigrate.substring(0,8)}... reported no records migrated or failed (this is expected if no prior anonymous usage from this IP/fallback).`);
+        return c.json({ ok: true, message: 'No usage data found to migrate from the determined IP hash, or migration failed.' });
+      }
+    } catch (migrationError) {
+      console.error(`[MIGRATE] User ${userId}: Error during migration from IP hash ${ipHashToMigrate.substring(0,8)}...:`, migrationError);
+      return c.json({ ok: false, error: 'An error occurred during usage migration.' }, 500);
     }
   } catch (error) {
-    console.error('[USAGE] Unexpected error in /usage handler:', error);
-    return c.json({ ok: false, error: 'An unexpected error occurred', errorCode: 'USAGE_UNEXPECTED_ERROR' }, 500);
+    console.error('[MIGRATE] Unexpected error in /usage/migrate handler:', error);
+    return c.json({ ok: false, error: 'An unexpected error occurred.' }, 500);
   }
 });
 
-app.post('/analyze', analyzeLimiter.middleware(), async (c) => {
+app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
   try {
     const authenticatedUser = c.get('user') as User | null;
+    let clientIpForHashing: string | undefined = getClientIp(c.req.raw); // Potentially undefined
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+
     let userKeyForUsage: string;
     let isAnonymousUsage = true;
-    let shouldTrackThisRequest = true; // Standardmäßig wird getrackt
+    let shouldTrackThisRequest = true; // Default to tracking
+    let currentLimit = MAX_ANONYMOUS_ANALYSES;
 
     if (authenticatedUser && authenticatedUser.id) {
-      userKeyForUsage = authenticatedUser.id;
-      isAnonymousUsage = false;
-      console.log(`[ANALYZE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check.`);
+        userKeyForUsage = authenticatedUser.id;
+        isAnonymousUsage = false;
+        currentLimit = MAX_AUTHENTICATED_ANALYSES;
+        console.log(`[ANALYZE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check. Limit: ${currentLimit}`);
     } else {
-      const clientIp = getClientIp(c.req.raw);
-      const isDevelopment = process.env.NODE_ENV !== 'production';
+        // Anonymous user logic
+        if (isDevelopment && (!clientIpForHashing || clientIpForHashing === '::1' || clientIpForHashing === '127.0.0.1')) {
+            clientIpForHashing = DEV_FALLBACK_IP;
+            console.log(`[ANALYZE] Development mode (anonymous): No real IP or localhost, using DEV_FALLBACK_IP: ${clientIpForHashing}`);
+        }
 
-      if (!clientIp && !isDevelopment) {
-        console.error('[ANALYZE] No client IP could be determined in production for anonymous user.');
-        return c.json({ ok: false, error: 'Could not determine client IP.' }, 400);
-      }
+        if (!clientIpForHashing) {
+            console.error('[ANALYZE] Anonymous user: Client IP could not be determined.');
+            return c.json({ ok: false, error: 'Client IP could not be determined for anonymous user.' }, 400);
+        }
 
-      const effectiveIp = clientIp || '127.0.0.1'; // Fallback für lokales Development
-      userKeyForUsage = hashIp(effectiveIp, IP_HASHING_SALT || '');
-      console.log(`[ANALYZE] Anonymous user. Using IP: ${clientIp ? 'Real client IP' : 'Development fallback IP'}. Hashed IP: ${userKeyForUsage.substring(0, 8)}...`);
+        if (!IP_HASHING_SALT) {
+            console.error('[ANALYZE] IP_HASHING_SALT is not configured.');
+            return c.json({ ok: false, error: 'Server configuration error: IP_HASHING_SALT is missing.' }, 500);
+        }
+        
+        userKeyForUsage = hashIp(clientIpForHashing, IP_HASHING_SALT);
+        console.log(`[ANALYZE] Anonymous user. IP used for hash: ${clientIpForHashing}. Hashed IP (userKey): ${userKeyForUsage.substring(0, 8)}... Limit: ${currentLimit}`);
 
-      // Im Development-Modus mit Fallback-IP das Tracking für DIESE Anfrage deaktivieren
-      if (isDevelopment && (effectiveIp === '127.0.0.1' || effectiveIp === 'dev-fallback-ip')) {
-        shouldTrackThisRequest = false;
-        console.log('[ANALYZE] Development mode with fallback IP detected, skipping usage tracking for this request.');
-      }
+        if (clientIpForHashing === DEV_FALLBACK_IP) {
+            shouldTrackThisRequest = true; // Explicitly enable tracking for DEV_FALLBACK_IP
+            console.log(`[ANALYZE] DEV_FALLBACK_IP detected. Usage tracking IS ENABLED. Ensuring DB record. Cookie setting for migration is removed.`);
+            await ensureUserUsageRecordExists(userKeyForUsage, true); // true for anonymous
+        } else if (isDevelopment) {
+            // For other IPs in development (e.g., a real IP if ngrok is used),
+            // tracking remains enabled by default (shouldTrackThisRequest = true).
+            console.log(`[ANALYZE] Development mode with non-DEV_FALLBACK_IP (${clientIpForHashing}). Tracking enabled by default.`);
+        }
+        // In production, for anonymous users, shouldTrackThisRequest remains true by default.
     }
     
-    // Fetch the current usage for this user from Supabase, if tracking is enabled for this request
+    // Fetch the current usage for this user, if tracking is enabled for this request
     if (shouldTrackThisRequest) {
-      // userKeyForUsage and isAnonymousUsage are already defined in the outer scope
-      try {
-        const usage = await getUsage(userKeyForUsage);
-        if (usage && usage.analysis_count >= (isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES)) {
-          console.log(`[ANALYZE] User ${userKeyForUsage.substring(0,8)}... has reached the analysis limit.`);
-          return c.json({
-            ok: false,
-            error: `You have reached the limit of ${(isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES)} free analyses. Please create an account for unlimited analyses.`,
-            errorCode: 'USAGE_LIMIT_EXCEEDED'
-          }, 429); // Too Many Requests
+        try {
+            const usage = await getUsage(userKeyForUsage);
+            if (usage && usage.analysis_count >= currentLimit) {
+                console.log(`[ANALYZE] User ${userKeyForUsage.substring(0,8)}... (anon: ${isAnonymousUsage}) has reached the analysis limit of ${currentLimit}.`);
+                return c.json({
+                    ok: false,
+                    error: `You have reached the limit of ${currentLimit} free analyses.`,
+                    errorCode: 'USAGE_LIMIT_EXCEEDED'
+                }, 429); // Too Many Requests
+            }
+            console.log(`[ANALYZE] Current usage for ${userKeyForUsage.substring(0,8)}... (anon: ${isAnonymousUsage}): ${usage?.analysis_count || 0}/${currentLimit} analyses`);
+        } catch (dbError) {
+            console.error(`[ANALYZE] Failed to fetch usage data for ${userKeyForUsage.substring(0,8)} (anon: ${isAnonymousUsage}), proceeding without usage check (graceful degradation):`, dbError);
         }
-        console.log(`[ANALYZE] Current usage for ${userKeyForUsage.substring(0,8)}...: ${usage?.analysis_count || 0} analyses`);
-      } catch (dbError) {
-        console.error('[ANALYZE] Failed to fetch usage data, proceeding without usage check:', dbError);
-        // Graceful degradation: If DB is down, allow analysis but log the error.
-        // This prevents the service from being entirely unavailable due to DB issues.
-      }
+    } else {
+        console.log(`[ANALYZE] Usage tracking is disabled for this request (userKey: ${userKeyForUsage.substring(0,8)}..., anon: ${isAnonymousUsage}).`);
     }
+
     const body = await c.req.json<AnalyzeRequest>();
     const locale = (body.locale && ['de', 'en', 'fr', 'es', 'it', 'pl', 'pt', 'nl'].includes(body.locale)) ? body.locale : 'de';
-    // Map locale to language name for system prompt
-    // Liste der unterstützten Sprachen
-    const supportedLanguages = ['en', 'de', 'fr', 'es', 'it', 'pl', 'pt', 'nl'];
     
-    // Funktion zur Auflösung der Sprache für den Prompt
+    const supportedLanguages = ['en', 'de', 'fr', 'es', 'it', 'pl', 'pt', 'nl'];
     function resolveLanguageForPrompt(userLang: string): string {
       if (supportedLanguages.includes(userLang)) return userLang;
-      return 'en'; // Fallback
+      return 'en'; 
     }
-    
-    // Bestimme die Sprache für den System-Prompt
     const resolvedLang = resolveLanguageForPrompt(locale || 'en');
-    
-    // Mapping von Sprachcodes zu vollständigen Sprachnamen
     const languageNames: Record<string, string> = {
-      'en': 'English',
-      'de': 'Deutsch',
-      'fr': 'Français',
-      'es': 'Español',
-      'it': 'Italiano',
-      'pl': 'Polski',
-      'pt': 'Português',
-      'nl': 'Nederlands'
+      'en': 'English', 'de': 'Deutsch', 'fr': 'Français', 'es': 'Español', 
+      'it': 'Italiano', 'pl': 'Polski', 'pt': 'Português', 'nl': 'Nederlands'
     };
-    
     const localeLang = languageNames[resolvedLang];
     console.log(`[LOCALE] Received locale from frontend:`, body.locale, '| Used locale:', locale, '| Resolved lang:', resolvedLang, '| Language for system prompt:', localeLang);
-    
+
     if (!body.pgn) {
       return c.json({ ok: false, error: 'Missing PGN data' }, 400);
     }
-    
-    // Normalisiere das PGN mit der gemeinsamen Funktion
-    console.log('[CACHE] Analyze: Original PGN hash:', crypto.createHash('md5').update(body.pgn).digest('hex'));
+
     const normalizedPgn = normalizePgn(body.pgn);
     console.log('[CACHE] Analyze: Normalized PGN hash:', crypto.createHash('md5').update(normalizedPgn).digest('hex'));
-    console.log('[CACHE] Analyze: Cache key with locale:', getCacheFilename(normalizedPgn, locale));
-    console.log('[CACHE] Analyze: Cache key without locale:', getCacheFilename(normalizedPgn));
     
-    // Erstelle einen Hash-Schlüssel für das PGN
-    const cacheKey = normalizedPgn;
-    
-    // Prüfe, ob die Analyse bereits im Cache ist (mit Locale-Unterstützung)
-    console.log('[CACHE] Analyze: Trying to load with locale first');
     let cachedEntry = await loadFromCache(normalizedPgn, locale);
-    
-    // Wenn kein Eintrag mit Locale gefunden wurde, versuche es ohne
     if (!cachedEntry) {
-      console.log('[CACHE] Analyze: No entry with locale found, trying without locale');
-      cachedEntry = await loadFromCache(normalizedPgn);
+      cachedEntry = await loadFromCache(normalizedPgn); // Fallback without locale
     }
-    
+
     if (cachedEntry) {
-      // Prüfe, ob der Cache-Eintrag noch gültig ist
       const now = Date.now();
-      
       if (now - cachedEntry.timestamp < CACHE_EXPIRY) {
-        console.log('Cache hit for PGN analysis');
-        
-        // Gib die gecachte Antwort zurück, mit einem Flag, dass es aus dem Cache kommt
-        return c.json({
-          ...cachedEntry.response,
-          cached: true
-        });
+        console.log('Cache hit for PGN analysis. Key (locale part):', locale);
+        return c.json({ ...cachedEntry.response, cached: true });
       } else {
-        // Cache-Eintrag ist abgelaufen
-        console.log('Cache expired for PGN analysis');
-        // Keine Notwendigkeit zu löschen, wird überschrieben
+        console.log('Cache expired for PGN analysis. Key (locale part):', locale);
       }
     }
-    
-    // Cache-Miss: Nutze die Anthropic API für die Schachanalyse
+
     try {
-      console.log('Cache miss, calling Anthropic API');
-      
-      // Erstelle den System-Prompt mit der gewünschten Sprache
+      console.log('Cache miss or expired, calling Anthropic API. Key (locale part):', locale);
       const systemPrompt = `You are a helpful chess analysis assistant. Please provide your analysis in ${localeLang}. The entire response must be in ${localeLang}, including all explanations, move descriptions, and strategic insights.`;
-      console.log('[LOCALE] Setting system prompt with language:', localeLang);
       
-      // Verwende einen einheitlichen englischen Prompt - die Sprache wird über den System-Prompt gesteuert
       const prompt = `Please analyze the following game and provide the response in **JSON format**.
 Provide the response exclusively as a valid JSON structure. No comments, no introduction, no explanations outside the JSON!
 Use only valid JSON syntax, especially no trailing brackets or commas in the wrong place.
@@ -796,7 +831,6 @@ Write the analysis so that it is understandable and useful for advanced beginner
 Here is the game in PGN format:
 ${normalizedPgn}`;
 
-      // Definiere Modelle für primäre Nutzung und Fallback
       const primaryModel = "claude-sonnet-4-20250514";
       const fallbackModel = "claude-3-sonnet@20240229";
       let modelToUse = primaryModel;
@@ -805,131 +839,90 @@ ${normalizedPgn}`;
       try {
         console.log(`Attempting analysis with primary model: ${primaryModel}`);
         message = await anthropic.messages.create({
-          model: modelToUse,
-          max_tokens: 10000,
-          temperature: 0.5,
-          system: systemPrompt,
-          messages: [
-            { role: "user", content: prompt }
-          ]
+          model: modelToUse, max_tokens: 10000, temperature: 0.5, system: systemPrompt,
+          messages: [{ role: "user", content: prompt }]
         });
       } catch (primaryModelError) {
-        // Prüfe, ob der Fehler eine Überlastung des Modells anzeigt
         const errorString = String(primaryModelError);
         if (errorString.includes('Overloaded') || errorString.includes('529')) {
           console.log(`Primary model ${primaryModel} overloaded, attempting fallback to ${fallbackModel}`);
           modelToUse = fallbackModel;
-          
-          // Versuche es mit dem Fallback-Modell
           message = await anthropic.messages.create({
-            model: modelToUse,
-            max_tokens: 10000,
-            temperature: 0.5,
-            system: systemPrompt,
-            messages: [
-              { role: "user", content: prompt }
-            ]
+            model: modelToUse, max_tokens: 10000, temperature: 0.5, system: systemPrompt,
+            messages: [{ role: "user", content: prompt }]
           });
           console.log(`Successfully used fallback model ${fallbackModel} for analysis`);
         } else {
-          // Wenn es ein anderer Fehler ist, wirf ihn weiter
           throw primaryModelError;
         }
       }
 
-      // Logge die vollständige Antwort von Anthropic
-      console.log('Raw Anthropic response:', JSON.stringify(message, null, 2));
-      
-      // Die aktuelle Anthropic SDK-Version gibt das Ergebnis in einer anderen Struktur zurück
-      let summary = '';
+      let summaryText = '';
       if (message.content && message.content.length > 0) {
-        // Extrahiere den Text aus den Content-Blöcken
         for (const block of message.content) {
-          if ('text' in block) {
-            summary += block.text;
-          }
+          if ('text' in block) { summaryText += block.text; }
         }
       }
+      console.log('Extracted summary from Anthropic:', summaryText.substring(0, 200) + "...");
+      summaryText = sanitizeClaudeResponse(summaryText);
       
-      // Logge die extrahierte Summary
-      console.log('Extracted summary:', summary);
-      
-      // Sanitize und repariere die Claude-Antwort, falls nötig
-      summary = sanitizeClaudeResponse(summary);
-      
-      // Parse the JSON response
-      let parsedResponse: any = {};
+      let parsedResponseContent: any = {};
       try {
-        // Versuche, die Antwort als JSON zu parsen
         const jsonBlockRegex = /```(?:json)?([\s\S]*?)```/g;
-        const match = jsonBlockRegex.exec(summary);
-        
+        const match = jsonBlockRegex.exec(summaryText);
         if (match && match[1]) {
-          parsedResponse = JSON.parse(match[1].trim());
+          parsedResponseContent = JSON.parse(match[1].trim());
         } else {
-          // Try parsing directly
-          parsedResponse = JSON.parse(summary);
+          parsedResponseContent = JSON.parse(summaryText);
         }
-      } catch (error) {
-        console.error('Error parsing JSON response:', error);
-        // Continue with empty response if parsing fails
+      } catch (parseError) {
+        console.error('Error parsing JSON response from Anthropic:', parseError);
       }
       
-      // Korrigiere die Ply-Werte, wenn Momente vorhanden sind
-      if (parsedResponse.moments && Array.isArray(parsedResponse.moments)) {
-        const { correctedMoments } = correctPlies(normalizedPgn, parsedResponse.moments);
-        console.log('Corrected moments:', JSON.stringify(correctedMoments, null, 2));
-        
-        // Setze die korrigierten Momente
-        parsedResponse.moments = correctedMoments;
+      if (parsedResponseContent.moments && Array.isArray(parsedResponseContent.moments)) {
+        const { correctedMoments } = correctPlies(normalizedPgn, parsedResponseContent.moments);
+        parsedResponseContent.moments = correctedMoments;
       }
       
-      // Erstelle die Antwort
-      const response: AnalyzeResponse = {
+      const analysisResponse: AnalyzeResponse = {
         ok: true,
-        summary: summary,
-        moments: parsedResponse.moments || [],
+        summary: summaryText, 
+        moments: parsedResponseContent.moments || [],
         cached: false
       };
       
-      // Speichere die Analyse im Cache (mit Locale, wenn vorhanden)
-      await saveToCache(normalizedPgn, {
-        timestamp: Date.now(),
-        response: response
-      }, locale);
+      await saveToCache(normalizedPgn, { timestamp: Date.now(), response: analysisResponse }, locale);
+      console.log(`[ANALYZE] Saved analysis to filesystem cache. Key (locale part): ${locale}`);
       
-      // Logging
-      console.log(`Saved analysis to filesystem cache`);
-
-      // Increment usage count for this user after successful analysis, if tracking is enabled for this request
       if (shouldTrackThisRequest) {
         try {
-          // userKeyForUsage und isAnonymousUsage sind bereits korrekt gesetzt
+          console.log(`[ANALYZE] Attempting to increment usage for userKey: ${userKeyForUsage.substring(0, 8)}... (isAnonymous: ${isAnonymousUsage})`);
           const updateResult = await directUpdateUsage(userKeyForUsage, isAnonymousUsage);
           if (updateResult.error) {
-            console.error(`[ANALYZE] Failed to update usage for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0, 8)}...:`, updateResult.error);
-            // Nicht-kritischer Fehler, Analyse trotzdem zurückgeben
+            console.error(`[ANALYZE] Failed to increment usage count for ${userKeyForUsage.substring(0, 8)}...:`, updateResult.error);
           } else {
-            console.log(`[ANALYZE] Usage updated successfully for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0, 8)}...`);
+            console.log(`[ANALYZE] Usage count updated for ${userKeyForUsage.substring(0, 8)}... New count: ${updateResult.data?.analysis_count || 'unknown'}`);
           }
         } catch (incrementError) {
-          console.error('[ANALYZE] Error incrementing usage:', incrementError);
-          // Nicht-kritischer Fehler, Analyse trotzdem zurückgeben
+          console.error('[ANALYZE] Error during usage increment call:', incrementError);
         }
       }
-      return c.json(response);
-    } catch (anthropicOrCacheError) {
-      console.error('Anthropic API or Caching error:', anthropicOrCacheError);
+      
+      return c.json(analysisResponse);
+
+    } catch (anthropicOrApiError) {
+      console.error('Anthropic API or other upstream error in /analyze:', anthropicOrApiError);
       return c.json({
         ok: false, 
-        error: 'Error analyzing game with Anthropic API or during caching',
-        details: anthropicOrCacheError instanceof Error ? anthropicOrCacheError.message : 'Unknown error'
+        error: 'Error analyzing game with Anthropic API or during processing.',
+        details: anthropicOrApiError instanceof Error ? anthropicOrApiError.message : String(anthropicOrApiError)
       }, 500);
     }
-  } catch (error) { // This is the outer catch for the entire /analyze endpoint
-    console.error('Error processing /analyze request:', error);
-    return c.json({ ok: false, error: 'Invalid request or unexpected error' }, 400);
-  }
+
+} catch (error) { // Outer catch for the entire /analyze endpoint
+    console.error('Outer error processing /analyze request:', error);
+    return c.json({ ok: false, error: 'Invalid request or unexpected server error.', errorCode: 'ANALYZE_UNEXPECTED_ERROR' }, 500);
+}
 });
 
 // Start the server

@@ -4,7 +4,7 @@
  */
 
 // Import API key from environment or config
-import { requestUsageData, UsageResponse } from '../services/api';
+import { requestUsageData, UsageResponse, requestMigrateUsage, MigrationResponse } from '../services/api';
 import { supabase } from '../supabaseClient';
 import { User } from '@supabase/supabase-js';
 import i18next from 'i18next';
@@ -209,6 +209,21 @@ async function initializePopup(language: string) {
       }
       if (event === 'SIGNED_IN') {
         console.log('[DEBUG] onAuthStateChange: SIGNED_IN event. User from session:', currentUser);
+        // Migration is now handled directly after GOOGLE_LOGIN message response.
+        // The following block is commented out to prevent duplicate migration attempts.
+        /*
+        console.log('[POPUP] User signed in via onAuthStateChange, (migration now handled elsewhere).');
+        requestMigrateUsage().then((migrationResponse: MigrationResponse) => {
+          console.log('[POPUP] Migration response (from onAuthStateChange):', migrationResponse);
+          if (migrationResponse.ok) {
+            console.log('[POPUP] Usage migration successful or not needed (from onAuthStateChange).');
+          } else {
+            console.error('[POPUP] Usage migration failed (from onAuthStateChange):', migrationResponse.error);
+          }
+        }).catch((error: unknown) => {
+            console.error('[POPUP] Error calling requestMigrateUsage (from onAuthStateChange):', error);
+        });
+        */
       }
       if (event === 'SIGNED_OUT') {
         console.log('[DEBUG] onAuthStateChange: SIGNED_OUT event. User should be null:', currentUser);
@@ -304,14 +319,29 @@ async function initializePopup(language: string) {
             console.log('Popup: Login successful via background script. User:', response.user);
             // UI update will primarily be handled by onAuthStateChange due to shared localStorage session.
             // For this specific popup instance, we can proactively update.
-            updateUIForAuthState(response.user); 
-            requestUsageData().then(usageResponse => {
-              updateUsageDisplay(usageResponse, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
-              clearLoginError();
-            }).catch(err => {
-              console.error("Failed to fetch usage data after login (via background):", err);
-              // Display a generic error or the specific one from usage data call
-              updateUsageDisplay({ ok: false, error: i18next.t('popup.error.fetchUsage') }, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
+            updateUIForAuthState(response.user); // Update UI immediately for responsiveness
+
+            console.log('[POPUP] Attempting usage migration after successful login...');
+            requestMigrateUsage().then((migrationResponse: MigrationResponse) => {
+              console.log('[POPUP] Migration attempt response:', migrationResponse);
+              if (migrationResponse.ok) {
+                console.log('[POPUP] Usage migration successful or not needed.');
+              } else {
+                console.error('[POPUP] Usage migration failed:', migrationResponse.error);
+                // Non-critical, don't show error to user
+              }
+            }).catch((error: unknown) => {
+                console.error('[POPUP] Error calling requestMigrateUsage:', error);
+            }).finally(() => {
+                // Always fetch usage data after migration attempt (success, fail, or no-op)
+                console.log('[POPUP] Fetching usage data after migration attempt.');
+                requestUsageData().then(usageResponse => {
+                  updateUsageDisplay(usageResponse, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
+                  clearLoginError(); // Clear login errors only after everything is loaded
+                }).catch(err => {
+                  console.error("Failed to fetch usage data after login/migration:", err);
+                  updateUsageDisplay({ ok: false, error: i18next.t('popup.error.fetchUsage') }, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
+                });
             });
           } else {
             console.error('Popup: Login failed via background script:', response?.error);

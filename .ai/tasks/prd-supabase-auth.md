@@ -2,7 +2,7 @@
 
 ## 1. Introduction/Overview
 
-This document outlines the requirements for implementing a user authentication system using Supabase Auth for the ChessGPT Chrome Extension. The primary goal is to differentiate between anonymous and registered users to manage analysis quotas, paving the way for future premium features.
+This document outlines the requirements for implementing a user authentication system using Supabase Auth for the ChessGPT Chrome Extension. The primary goal is to differentiate between anonymous and registered users to manage credit balances, paving the way for future premium features.
 
 ## 2. Goals
 
@@ -15,8 +15,8 @@ This document outlines the requirements for implementing a user authentication s
 
 -   already done: **As an anonymous user,** I want to be able to perform more than my 5 free anonymous analyses so that I can evaluate the extension's value.
 -   **As an anonymous user who has reached my limit,** I want to easily sign up for a free account so that I can continue using the service.
--   **As a registered user,** I want to log in to my account using Google login to access my analysis quota.
--   **As a logged-in user,** I want to see my logged-in status and my remaining analysis count within the popup, and I want a clear option to log out.
+-   **As a registered user,** I want to log in to my account using Google login to access my credit balance.
+-   **As a logged-in user,** I want to see my logged-in status and my remaining credits within the popup, and I want a clear option to log out.
 
 ## 4. Functional Requirements
 
@@ -29,12 +29,12 @@ This document outlines the requirements for implementing a user authentication s
     -   This token will then be used to authenticate the user with Supabase (`signInWithIdToken`).
     -   Upon successful registration, the user is automatically logged in.
 
-4.  **Usage Quota Transition:**
-    -   Analyses performed as an anonymous user are considered a free trial. A new, registered user account is no longer subject to the initial 5-analysis as they can buy more. (not in scope of this ticket)
+4.  **Credit Migration on Login:**
+    -   Upon first login, the total `analysis_count` and any remaining `credits` from the anonymous session are transferred to the new user account. The anonymous account's credits are then set to zero to prevent further use.
 
 5.  **Logged-in State UI:**
     -   When a user is logged in, the popup must display their identifier (e.g., email address).
-    -   The popup must display the current analysis quota for the logged-in user.
+    -   The popup must display the current credit balance for the logged-in user.
     -   A clearly visible "Logout" button must be present.
     -   Clicking "Logout" must end the user's session and return the UI to the anonymous state.
 
@@ -56,11 +56,11 @@ This document outlines the requirements for implementing a user authentication s
 ## 7. Technical Considerations
 
 -   **Backend:** The server endpoints (especially for usage tracking) must be updated to handle both anonymous and authenticated JWT-based requests.
--   **Database:** The database schema needs to be adapted to link analysis usage to registered user IDs.
+-   **Database:** The database schema will be extended. We will keep `analysis_count` to track total analyses performed for analytical purposes, and add a new `credits` column to manage the remaining usage limit. This provides a clear separation between analytics and limit enforcement.
 -   **Environment:** Supabase URL and Anon Key must be managed via environment variables. => done as we've done the postgres stuff with supabase already -> anything else to do?
 -   **Client-side:** The extension's frontend logic must manage auth state, tokens (obtained via `chrome.identity`), and dynamically update the UI. It will require the `identity` permission in `manifest.json`.
 -   **Supabase Client:** Will use `signInWithIdToken` with the Google ID token.
 
 ## 9. Open Questions
 
--   What is the initial analysis quota for a newly registered user? => we should take the quota they have from anonymous tracking.
+-   What is the initial credit balance for a newly registered user? => we should take the quota they have from anonymous tracking.

@@ -38,18 +38,23 @@ export interface AnalysisResponse {
   };
 }
 
-// Interface for the usage data response
+export interface MigrationResponse {
+  ok: boolean;
+  message?: string;
+  error?: string;
+}
+
 export interface UsageResponse {
   ok: boolean;
   usage?: {
     current: number;
     limit: number;
   };
-  error?: string;
-  errorCode?: string;
   developmentMode?: boolean;
   message?: string;
+  error?: string;
 }
+
 
 export interface AnalysisMoment {
   ply: number;
@@ -154,5 +159,26 @@ export function requestUsageData(): Promise<UsageResponse> {
       console.error('Fehler beim Senden der GET_USAGE Nachricht:', error);
       resolve({ ok: false, error: 'Fehler bei der Kommunikation mit dem Hintergrundskript.' });
     }
+  });
+}
+
+/**
+ * Triggers the migration of usage data from anonymous to authenticated user.
+ */
+export function requestMigrateUsage(): Promise<MigrationResponse> {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage({ type: 'MIGRATE_USAGE' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Migration request failed:', chrome.runtime.lastError.message);
+        resolve({ ok: false, error: 'Kommunikationsfehler mit dem Hintergrundskript.' });
+        return;
+      }
+      if (response) {
+        resolve(response);
+      } else {
+        // Fallback for unexpected empty response
+        resolve({ ok: false, error: 'Leere Antwort vom Hintergrundskript erhalten.' });
+      }
+    });
   });
 }

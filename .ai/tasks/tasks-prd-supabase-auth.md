@@ -50,25 +50,33 @@
   - [x] 4.5 In `extension/src/popup/index.ts`, implement `handleLogout` function using `supabase.auth.signOut()`.
   - [x] 4.6 Ensure that after logout, the UI reverts to the anonymous state, and any user-specific data is cleared from the popup's state.
 
-- [ ] 5.0 Backend Adjustments for Authenticated Users
-  - [ ] 5.1 Modify `server/index.ts` middleware to parse JWTs from Supabase in the `Authorization` header.
-  - [ ] 5.2 Update the `/usage` endpoint (and any other relevant endpoints) to:
-    - [ ] 5.2.1 Identify users based on their JWT (user ID).
-    - [ ] 5.2.2 Fetch/update usage data from the database based on the authenticated user ID instead of IP address.
-  - [ ] 5.3 Ensure anonymous IP-based tracking still works for unauthenticated requests.
+- [x] 5.0 Backend Adjustments for Authenticated Users
+  - [x] 5.1 Modify `server/index.ts` middleware to parse JWTs from Supabase in the `Authorization` header.
+  - [x] 5.2 Update the `/usage` endpoint (and any other relevant endpoints) to:
+    - [x] 5.2.1 Identify users based on their JWT (user ID).
+    - [x] 5.2.2 Fetch/update usage data from the database based on the authenticated user ID instead of IP address.
+  - [x] 5.3 Ensure anonymous IP-based tracking still works for unauthenticated requests.
 
-- [ ] 6.0 Database Schema and Logic for Registered Users
-  - [ ] 6.1 Review the existing `ip_analysis_counts` table in `server/db/schema.ts` (or equivalent).
-  - [ ] 6.2 Add a `user_id` column (nullable, or a separate table for user-specific quotas) to associate analysis counts with registered Supabase users.
-  - [ ] 6.3 Consider if a separate `users` table is needed to store additional profile information from Supabase, or if Supabase's `auth.users` table is sufficient for now.
-  - [ ] 6.4 Update database queries in the backend to reflect the new schema for fetching and incrementing usage for registered users.
-  - [ ] 6.5 Define the initial analysis quota for a newly registered user (as per PRD: take over the anonymous quota, then they can buy more - buying is out of scope for this PRD).
+- [ ] 6.0 Extend Database with a Credit-Based System
+  - [ ] 6.1 Create a new database migration file (e.g., `002_add_credits_column.sql`).
+  - [ ] 6.2 In the migration, alter the `user_usage` table: add a new `credits` column (INTEGER, NOT NULL, DEFAULT 10). The existing `analysis_count` column will be kept to track total lifetime analyses.
+  - [ ] 6.3 Update the server logic in the `/analyze` endpoint: on each analysis, it must now **increment `analysis_count`** and **decrement `credits`**.
+  - [ ] 6.4 Update the `/usage` endpoint to return the current `credits` and the `limit` (which can be a fixed value for now).
 
-- [ ] 7.0 Testing
-  - [ ] 7.1 Write unit tests for new UI components and logic in `extension/src/popup/popup.test.ts` (e.g., form submissions, UI state changes, auth function calls).
-  - [ ] 7.2 Write integration tests in `server/tests/integration/auth-endpoints.test.ts` for:
-    - [ ] 7.2.1 Anonymous user limit enforcement.
-    - [ ] 7.2.2 Authenticated user usage tracking via JWT.
-    - [ ] 7.2.3 Behavior of endpoints with invalid/expired tokens.
-  - [ ] 7.3 Manually test the end-to-end sign-up, login (email & Google), and logout flows in the extension.
-  - [ ] 7.4 Manually test the transition from anonymous usage to logged-in usage and quota display.
+- [ ] 7.0 Implement Usage & Credit Migration on First Login
+  - [ ] 7.1 Update the Supabase RPC function `migrate_usage_from_ip_to_user` to handle both counts and credits:
+    - [ ] 7.1.1 Finds the usage record for the anonymous `p_ip_hash`.
+    - [ ] 7.1.2 Checks if the authenticated `p_user_id` already has a usage record (if so, do nothing and return).
+    - [ ] 7.1.3 If the IP record exists and the user record does NOT, it creates a new user record, transferring both the `analysis_count` and the remaining `credits` from the IP record.
+    - [ ] 7.1.4 "Neutralizes" the original IP record by setting its `credits` to 0, while leaving the `analysis_count` intact for historical data.
+  - [ ] 7.2 Ensure the existing backend endpoint `POST /usage/migrate` correctly calls the updated RPC function.
+  - [ ] 7.3 Ensure the frontend continues to trigger the migration on the `SIGNED_IN` event.
+
+- [ ] 8.0 Testing
+  - [ ] 8.1 Write unit tests for new UI components and logic in `extension/src/popup/popup.test.ts` (e.g., form submissions, UI state changes, auth function calls).
+  - [ ] 8.2 Write integration tests in `server/tests/integration/auth-endpoints.test.ts` for:
+    - [ ] 8.2.1 Anonymous user credit limit enforcement.
+    - [ ] 8.2.2 Authenticated user credit tracking via JWT.
+    - [ ] 8.2.3 Behavior of endpoints with invalid/expired tokens.
+  - [ ] 8.3 Manually test the end-to-end sign-up, login (email & Google), and logout flows in the extension.
+  - [ ] 8.4 Manually test the transition from anonymous usage to logged-in usage and credit display, including the migration of remaining credits.

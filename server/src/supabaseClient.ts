@@ -125,6 +125,64 @@ export async function directUpdateUsage(
  * @param userKey The unique key for the user (e.g., hashed IP).
  * @returns True if deletion was successful or user not found, false on error.
  */
+/**
+ * Calls the Supabase RPC to migrate usage data from an anonymous IP hash to a user ID.
+ * @param userId The authenticated user's ID.
+ * @param ipHash The hashed IP of the anonymous session.
+ * @returns True if the migration was successful, false otherwise.
+ */
+export async function migrateUsage(userId: string, ipHash: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('migrate_usage_from_ip_to_user', {
+    p_user_id: userId,
+    p_ip_hash: ipHash,
+  });
+
+  if (error) {
+    console.error('Error calling migrate_usage_from_ip_to_user RPC:', error);
+    return false;
+  }
+
+  console.log(`[SupabaseClient] RPC migrate_usage_from_ip_to_user returned: ${data}`);
+  return data; // The RPC returns a boolean.
+}
+
+/**
+ * Ensures a user usage record exists for the given key.
+ * If it doesn't exist, it creates one with analysis_count = 0.
+ * @param userKey The unique key for the user.
+ * @param isAnonymous Whether the user is anonymous.
+ * @returns The existing or newly created user usage row, or null on error during creation.
+ */
+export async function ensureUserUsageRecordExists(userKey: string, isAnonymous: boolean): Promise<UserUsageRow | null> {
+  let usageRecord = await getUsage(userKey);
+
+  if (!usageRecord) {
+    const now = new Date().toISOString();
+    console.log(`[SupabaseClient] No usage record found for ${userKey}. Creating new one.`);
+    const { data: newRecord, error: insertError } = await supabase
+      .from('user_usage')
+      .insert({
+        user_key: userKey,
+        is_anonymous: isAnonymous,
+        analysis_count: 0, // Initialize with 0 analyses
+        first_analysis_timestamp: now,
+        last_analysis_timestamp: now,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      console.error('[SupabaseClient] Error creating initial user usage record:', insertError);
+      // Depending on desired error handling, you might throw or return null.
+      // For now, returning null to indicate failure to ensure record.
+      return null;
+    }
+    usageRecord = newRecord;
+    console.log(`[SupabaseClient] Successfully created new usage record for ${userKey} with 0 analyses.`);
+  }
+  return usageRecord;
+}
+
 export async function clearUserUsageByHashedIp(userKey: string): Promise<boolean> {
   const { error } = await supabase
     .from('user_usage')

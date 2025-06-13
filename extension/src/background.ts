@@ -14,6 +14,7 @@ if (supabase) {
 
 const CACHE_CHECK_ENDPOINT = `${SERVER_URL}/check-cache`;
 const ANALYZE_ENDPOINT = `${SERVER_URL}/analyze`;
+const MIGRATE_ENDPOINT = `${SERVER_URL}/usage/migrate`; // Updated endpoint
 
 // Hilfsfunktion zum Erstellen der API-Header
 async function getApiHeaders(): Promise<Record<string, string>> {
@@ -76,6 +77,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_USAGE') {
     console.log('Background: Processing GET_USAGE request');
     fetchUsageData().then(sendResponse);
+    return true; // Indicates asynchronous response
+  }
+
+  // Handle usage migration requests
+  if (message.type === 'MIGRATE_USAGE') {
+    console.log('Background: Processing MIGRATE_USAGE request');
+    triggerUsageMigration().then(sendResponse);
     return true; // Indicates asynchronous response
   }
 
@@ -281,6 +289,41 @@ async function fetchUsageData() {
     console.error('Background: Failed to fetch usage data:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { ok: false, error: 'Serververbindung für Nutzungsdaten fehlgeschlagen', details: errorMessage };
+  }
+}
+
+/**
+ * Triggers the migration of usage data from anonymous to authenticated user.
+ */
+async function triggerUsageMigration() {
+  console.log('Background: Triggering usage migration to', MIGRATE_ENDPOINT);
+  try {
+    const headers = await getApiHeaders();
+    // The JWT must be present for this to succeed. getApiHeaders handles this.
+    if (!headers['Authorization']) {
+      console.warn('Background: Migration trigger failed. No authorization token found.');
+      return { ok: false, error: 'Authentication token not available.' };
+    }
+
+    const response = await fetch(MIGRATE_ENDPOINT, {
+      method: 'POST',
+      headers: headers,
+      credentials: 'include' // Ensure cookies are sent
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Background: HTTP error during migration! status: ${response.status}`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Background: Usage migration response received:', data);
+    return data;
+  } catch (error) {
+    console.error('Background: Failed to trigger usage migration:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { ok: false, error: 'Serververbindung für Migration fehlgeschlagen', details: errorMessage };
   }
 }
 
