@@ -24,6 +24,7 @@
   - [x] 1.2 Add Supabase URL and Anon Key to `extension/src/config.ts` (ensure they are loaded from environment variables during build if possible, or clearly documented for manual setup).
   - [x] 1.3 Create a Supabase client instance, potentially in `extension/src/background.ts` or a dedicated `supabaseClient.ts` to be imported where needed.
   - [x] 1.4 Ensure Supabase client is initialized correctly when the extension starts.
+  - [x] 1.5 Add `identity` permission to `extension/public/manifest.json`.
 
 - [x] 2.0 Implement UI for Anonymous User Limit and Login/Signup Prompt
   - [x] 2.1 Modify `extension/src/popup/index.ts` to check if the anonymous user limit (5 analyses) is reached.
@@ -31,19 +32,20 @@
   - [x] 2.3 Display a clear message in `extension/public/popup.html` prompting the user to sign up or log in to continue, e.g., "You've used your 5 free analyses. Please sign up or log in to continue."
   - [x] 2.4 Add buttons/links for "Sign Up / Log In" that will lead to the auth forms (Task 3.0).
 
-- [ ] 3.0 Implement "Continue with Google" Login Flow
-  - [ ] 3.1 Add a "Continue with Google" button to the UI in `extension/public/popup.html`.
-  - [ ] 3.2 Implement the logic in `extension/src/popup/index.ts` to handle the button click and initiate the Supabase social login (Google).
-  - [ ] 3.3 The Supabase client will handle the OAuth flow in a new browser popup.
-  - [ ] 3.4 Ensure errors from the OAuth flow are gracefully handled and displayed to the user.
-  - [ ] 3.5 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (store JWT, user data).
-  - [ ] 3.6 Implement error handling and display appropriate messages for auth failures.
-  - [ ] 3.7 Upon successful login, transition the UI to the logged-in state (Task 4.0).
+- [ ] 3.0 Implement "Continue with Google" Login Flow using `chrome.identity`
+  - [x] 3.1 Add a "Continue with Google" button to the UI in `extension/public/popup.html`.
+  - [x] 3.2 Implement logic in `extension/src/popup/index.ts` to handle the button click:
+    - Call `chrome.identity.getAuthToken({ interactive: true })` to get a Google OAuth ID token.
+  - [x] 3.3 Once the Google ID token is obtained, use it to sign in with Supabase:
+    - Call `supabase.auth.signInWithIdToken({ provider: 'google', token: id_token })`.
+  - [x] 3.4 Ensure errors from both `chrome.identity.getAuthToken()` and the Supabase `signInWithIdToken` process are gracefully handled and displayed to the user.
+  - [x] 3.5 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (Supabase will issue its own JWT after successful `signInWithIdToken`).
+  - [x] 3.6 Upon successful login, transition the UI to the logged-in state (Task 4.0).
 
 - [ ] 4.0 Implement Logged-in State UI in Popup
   - [ ] 4.1 In `extension/public/popup.html`, create a new UI section for the logged-in state.
   - [ ] 4.2 Display the logged-in user's identifier (e.g., email) in this section.
-  - [ ] 4.3 Display the user's current analysis quota (this might require a backend call or be part of the user session data).
+  - [ ] 4.3 [outscoped: need to do this later i think] Display the user's current analysis quota (this might require a backend call or be part of the user session data).
   - [ ] 4.4 Add a "Logout" button.
   - [ ] 4.5 In `extension/src/popup/index.ts`, implement `handleLogout` function using `supabase.auth.signOut()`.
   - [ ] 4.6 Ensure that after logout, the UI reverts to the anonymous state, and any user-specific data is cleared from the popup's state.

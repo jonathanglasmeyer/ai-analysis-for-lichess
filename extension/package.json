@@ -1,5 +1,6 @@
 {
   "name": "chess-gpt-extension",
+  "type": "module",
   "version": "0.1.0",
   "main": "index.js",
   "description": "ChessGPT Lichess Integration Extension",
@@ -26,6 +27,7 @@
     "@types/chrome": "^0.0.323",
     "@types/node": "^24.0.0",
     "rollup": "^4.41.1",
+    "rollup-plugin-polyfill-node": "^0.13.0",
     "rollup-plugin-typescript2": "^0.36.0",
     "typescript": "^5.8.3"
   },

@@ -33,6 +33,7 @@
 # Open
 ### Produktbestandteile
 - [ ]  **User Login**
+- [ ]  Also allow logging & purchasing packages before 5 free analyses are used up.
 - [ ]  Stripe integration
 - [ ]  Buying credits
     - [ ]  Show remaining credits

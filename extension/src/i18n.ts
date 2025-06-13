@@ -25,9 +25,11 @@ const resources = {
       'popup.devModeMessage': 'Usage tracking is disabled in development mode.',
       'popup.errorNetwork': 'Network error. Could not connect to server.',
       'popup.errorServer': 'Server error (Status: {{status}}). Please try again later.',
-      'popup.limitReachedMessage': 'Your 5 free analyses are done. Sign in with Google to get more analysis packs.',
-      'popup.signUp': 'Sign Up',
-      'popup.logIn': 'Log In',
+      'popup.loginPrompt': 'Please log in to continue using the analysis features.',
+      'popup.continueWithGoogle': 'Continue with Google',
+      'popup.error.googleAuth': 'Google authentication failed. Please try again.',
+      'popup.error.userCancelled': 'Authentication cancelled by user.',
+      'popup.error.supabaseLogin': 'Supabase login failed. Please try again.',
       'error.serverConnection': 'Could not connect to the server. Please check your connection.',
       'error.unknownAnalysisError': 'An unknown error occurred during the analysis.'
     }
@@ -56,9 +58,11 @@ const resources = {
       'popup.devModeMessage': 'Nutzungs-Tracking im Entwicklungsmodus deaktiviert.',
       'popup.errorNetwork': 'Netzwerkfehler. Konnte keine Verbindung zum Server herstellen.',
       'popup.errorServer': 'Serverfehler (Status: {{status}}). Bitte später erneut versuchen.',
-      'popup.limitReachedMessage': 'Deine 5 kostenlosen Analysen sind aufgebraucht. Melde dich mit Google an und hol dir weitere Analyse-Pakete.',
-      'popup.signUp': 'Registrieren',
-      'popup.logIn': 'Anmelden',
+      'popup.loginPrompt': 'Bitte melde dich an, um die Analysefunktionen weiterhin zu nutzen.',
+      'popup.continueWithGoogle': 'Weiter mit Google',
+      'popup.error.googleAuth': 'Google-Authentifizierung fehlgeschlagen. Bitte erneut versuchen.',
+      'popup.error.userCancelled': 'Authentifizierung vom Benutzer abgebrochen.',
+      'popup.error.supabaseLogin': 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',
       'error.serverConnection': 'Verbindung zum Server fehlgeschlagen. Bitte prüfe deine Verbindung.',
       'error.unknownAnalysisError': 'Ein unbekannter Fehler ist während der Analyse aufgetreten.'
     }
@@ -88,9 +92,11 @@ const resources = {
       'popup.devModeMessage': 'Le suivi de l\'utilisation est désactivé en mode développement.',
       'popup.errorNetwork': 'Erreur réseau. Impossible de se connecter au serveur.',
       'popup.errorServer': 'Erreur du serveur (Statut : {{status}}). Veuillez réessayer plus tard.',
-      'popup.limitReachedMessage': 'Vos 5 analyses gratuites sont terminées. Connectez-vous avec Google pour obtenir plus de packs d\'analyse.',
-      'popup.signUp': 'S\'inscrire',
-      'popup.logIn': 'Se connecter',
+      'popup.loginPrompt': 'Veuillez vous connecter pour continuer à utiliser les fonctionnalités d\'analyse.',
+      'popup.continueWithGoogle': 'Continuer avec Google',
+      'popup.error.googleAuth': 'L\'authentification Google a échoué. Veuillez réessayer.',
+      'popup.error.userCancelled': 'Authentification annulée par l\'utilisateur.',
+      'popup.error.supabaseLogin': 'La connexion à Supabase a échoué. Veuillez réessayer.',
       'error.serverConnection': 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion.',
       'error.unknownAnalysisError': 'Une erreur inconnue est survenue lors de l\'analyse.'
     }
@@ -120,9 +126,11 @@ const resources = {
       'popup.devModeMessage': 'El seguimiento de uso está deshabilitado en modo de desarrollo.',
       'popup.errorNetwork': 'Error de red. No se pudo conectar al servidor.',
       'popup.errorServer': 'Error del servidor (Estado: {{status}}). Por favor, inténtelo de nuevo más tarde.',
-      'popup.limitReachedMessage': 'Tus 5 análisis gratuitos se han agotado. Inicia sesión con Google para obtener más paquetes de análisis.',
-      'popup.signUp': 'Registrarse',
-      'popup.logIn': 'Iniciar sesión',
+      'popup.loginPrompt': 'Por favor, inicia sesión para seguir utilizando las funciones de análisis.',
+      'popup.continueWithGoogle': 'Continuar con Google',
+      'popup.error.googleAuth': 'La autenticación de Google falló. Por favor, inténtelo de nuevo.',
+      'popup.error.userCancelled': 'Autenticación cancelada por el usuario.',
+      'popup.error.supabaseLogin': 'El inicio de sesión en Supabase falló. Por favor, inténtelo de nuevo.',
       'error.serverConnection': 'No se pudo conectar al servidor. Por favor, compruebe su conexión.',
       'error.unknownAnalysisError': 'Ocurrió un error desconocido durante el análisis.'
     }
@@ -152,9 +160,11 @@ const resources = {
       'popup.devModeMessage': 'Il tracciamento dell\'utilizzo è disabilitato in modalità sviluppo.',
       'popup.errorNetwork': 'Errore di rete. Impossibile connettersi al server.',
       'popup.errorServer': 'Errore del server (Stato: {{status}}). Riprova più tardi.',
-      'popup.limitReachedMessage': 'Le tue 5 analisi gratuite sono terminate. Accedi con Google per ottenere altri pacchetti di analisi.',
-      'popup.signUp': 'Registrati',
-      'popup.logIn': 'Accedi',
+      'popup.loginPrompt': 'Effettua il login per continuare a utilizzare le funzioni di analisi.',
+      'popup.continueWithGoogle': 'Continua con Google',
+      'popup.error.googleAuth': 'Autenticazione Google non riuscita. Riprova.',
+      'popup.error.userCancelled': 'Autenticazione annullata dall\'utente.',
+      'popup.error.supabaseLogin': 'Accesso a Supabase non riuscito. Riprova.',
       'error.serverConnection': 'Impossibile connettersi al server. Controlla la tua connessione.',
       'error.unknownAnalysisError': 'Si è verificato un errore sconosciuto durante l\'analisi.'
     }
@@ -184,9 +194,11 @@ const resources = {
       'popup.devModeMessage': 'Śledzenie użycia jest wyłączone w trybie deweloperskim.',
       'popup.errorNetwork': 'Błąd sieci. Nie można połączyć się z serwerem.',
       'popup.errorServer': 'Błąd serwera (Status: {{status}}). Spróbuj ponownie później.',
-      'popup.limitReachedMessage': 'Twoje 5 darmowych analiz zostało wykorzystanych. Zaloguj się przez Google, aby uzyskać więcej pakietów analiz.',
-      'popup.signUp': 'Zarejestruj się',
-      'popup.logIn': 'Zaloguj się',
+      'popup.loginPrompt': 'Zaloguj się, aby kontynuować korzystanie z funkcji analizy.',
+      'popup.continueWithGoogle': 'Kontynuuj z Google',
+      'popup.error.googleAuth': 'Uwierzytelnianie Google nie powiodło się. Spróbuj ponownie.',
+      'popup.error.userCancelled': 'Uwierzytelnianie anulowane przez użytkownika.',
+      'popup.error.supabaseLogin': 'Logowanie do Supabase nie powiodło się. Spróbuj ponownie.',
       'error.serverConnection': 'Nie można połączyć się z serwerem. Sprawdź swoje połączenie.',
       'error.unknownAnalysisError': 'Wystąpił nieznany błąd podczas analizy.'
     }
@@ -216,9 +228,11 @@ const resources = {
       'popup.devModeMessage': 'O rastreamento de uso está desativado no modo de desenvolvimento.',
       'popup.errorNetwork': 'Erro de rede. Não foi possível conectar ao servidor.',
       'popup.errorServer': 'Erro do servidor (Status: {{status}}). Por favor, tente novamente mais tarde.',
-      'popup.limitReachedMessage': 'Suas 5 análises gratuitas acabaram. Faça login com o Google para obter mais pacotes de análise.',
-      'popup.signUp': 'Inscrever-se',
-      'popup.logIn': 'Entrar',
+      'popup.loginPrompt': 'Faça login para continuar usando os recursos de análise.',
+      'popup.continueWithGoogle': 'Continuar com o Google',
+      'popup.error.googleAuth': 'A autenticação do Google falhou. Por favor, tente novamente.',
+      'popup.error.userCancelled': 'Autenticação cancelada pelo usuário.',
+      'popup.error.supabaseLogin': 'O login no Supabase falhou. Por favor, tente novamente.',
       'error.serverConnection': 'Não foi possível conectar ao servidor. Por favor, verifique sua conexão.',
       'error.unknownAnalysisError': 'Ocorreu um erro desconhecido durante a análise.'
     }
@@ -248,9 +262,11 @@ const resources = {
       'popup.devModeMessage': 'Gebruikers-tracking is uitgeschakeld in de ontwikkelaarsmodus.',
       'popup.errorNetwork': 'Netwerkfout. Kon geen verbinding maken met de server.',
       'popup.errorServer': 'Serverfout (Status: {{status}}). Probeer het later opnieuw.',
-      'popup.limitReachedMessage': 'Je 5 gratis analyses zijn op. Log in met Google om meer analysepakketten te krijgen.',
-      'popup.signUp': 'Registreren',
-      'popup.logIn': 'Inloggen',
+      'popup.loginPrompt': 'Log in om de analysefuncties te blijven gebruiken.',
+      'popup.continueWithGoogle': 'Doorgaan met Google',
+      'popup.error.googleAuth': 'Google-authenticatie mislukt. Probeer het opnieuw.',
+      'popup.error.userCancelled': 'Authenticatie geannuleerd door gebruiker.',
+      'popup.error.supabaseLogin': 'Supabase-login mislukt. Probeer het opnieuw.',
       'error.serverConnection': 'Kon geen verbinding maken met de server. Controleer je verbinding.',
       'error.unknownAnalysisError': 'Er is een onbekende fout opgetreden tijdens de analyse.'
     }

@@ -25,8 +25,8 @@ This document outlines the requirements for implementing a user authentication s
     -   [Not yet done!] When the limit is reached, the UI must clearly prompt the user to sign up or log in to continue.
 
 2.  **User Registration (Sign-up and/or Login, should be combined ("Continue with Google" pattern)):**
-    -   The popup UI must provide sign-up options for:
-        -   Social Logins supported by Supabase Auth (Google).
+    -   The extension will use `chrome.identity.getAuthToken()` to obtain a Google OAuth ID token.
+    -   This token will then be used to authenticate the user with Supabase (`signInWithIdToken`).
     -   Upon successful registration, the user is automatically logged in.
 
 4.  **Usage Quota Transition:**
@@ -51,14 +51,15 @@ This document outlines the requirements for implementing a user authentication s
     1.  **Anonymous State:** Shows usage count. If the limit is hit, it displays a login/sign-up prompt.
     2.  **Auth State:** Shows a "Continue with Google" button.
     3.  **Logged-in State:** Shows user email, analysis count, and a logout button.
--   The Social Login flow will likely trigger a new browser popup for the OAuth process, which is standard and acceptable.
+-   The `chrome.identity.getAuthToken()` flow will trigger a Chrome-managed UI popup for Google account selection and consent, which is standard.
 
 ## 7. Technical Considerations
 
 -   **Backend:** The server endpoints (especially for usage tracking) must be updated to handle both anonymous and authenticated JWT-based requests.
 -   **Database:** The database schema needs to be adapted to link analysis usage to registered user IDs.
 -   **Environment:** Supabase URL and Anon Key must be managed via environment variables. => done as we've done the postgres stuff with supabase already -> anything else to do?
--   **Client-side:** The extension's frontend logic must manage auth state, tokens, and dynamically update the UI based on the user's login status.
+-   **Client-side:** The extension's frontend logic must manage auth state, tokens (obtained via `chrome.identity`), and dynamically update the UI. It will require the `identity` permission in `manifest.json`.
+-   **Supabase Client:** Will use `signInWithIdToken` with the Google ID token.
 
 ## 9. Open Questions
 

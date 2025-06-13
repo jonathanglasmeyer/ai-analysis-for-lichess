@@ -5,7 +5,6 @@
 // Definiert, ob die Extension im Produktionsmodus gebaut wird.
 // Dieser Wert wird durch den Rollup-Build-Prozess (mittels @rollup/plugin-replace)
 // basierend auf der NODE_ENV Umgebungsvariable gesetzt.
-// @ts-ignore: Dieser Platzhalter wird durch den Build-Prozess ersetzt.
 const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
 
 // Domain für den Produktionsserver
@@ -19,11 +18,12 @@ export const SERVER_URL = IS_PRODUCTION_BUILD
 // API-Key für die Authentifizierung (immer derselbe hartcodierte Wert)
 export const CHESS_GPT_API_KEY = 'chess-gpt-extension-key-2022';
 
-// Supabase Configuration
-// @ts-ignore: These placeholders are replaced by the build process.
-export const SUPABASE_URL = process.env.SUPABASE_URL;
-// @ts-ignore: These placeholders are replaced by the build process.
-export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+// Supabase Konfiguration
+// Diese Werte werden durch den Rollup-Build-Prozess (mittels @rollup/plugin-replace)
+// basierend auf den Umgebungsvariablen SUPABASE_URL und SUPABASE_ANON_KEY gesetzt.
+export const SUPABASE_URL = "https://grorvvhwftzcwyhckfys.supabase.co";
+
+export const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdyb3J2dmh3ZnR6Y3d5aGNrZnlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk1MzcwODEsImV4cCI6MjA2NTExMzA4MX0.RiwTIjGwLyN-LrcGuLkkomGgJSa1YNZhpju5TogGYr8";
 
 // Maximale Anzahl anonymer Analysen (nur zur Anzeige, serverseitig erzwungen)
 export const MAX_ANONYMOUS_ANALYSES = 5;

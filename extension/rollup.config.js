@@ -33,8 +33,10 @@ export default [
         tsconfig: 'tsconfig.json',
       }),
       json(),
-      nodeResolve({ preferBuiltins: false }),
-      commonjs(),
+      nodeResolve({ preferBuiltins: false, browser: true }),
+      commonjs({
+        transformMixedEsModules: true,
+      }),
       process.env.NODE_ENV === 'production' && terser(),
     ],
   },
@@ -46,9 +48,9 @@ export default [
       sourcemap: process.env.NODE_ENV !== 'production',
     },
     moduleContext: (id) => {
-      // Suppress "this is undefined" warnings for Supabase and related modules
+      // For Service Worker context (background script), use 'self' instead of 'window'
       if (id.includes('node_modules/@supabase/supabase-js/') || id.includes('node_modules/@supabase/functions-js/') || id.includes('node_modules/@supabase/auth-js/') || id.includes('node_modules/@supabase/storage-js/') || id.includes('node_modules/tr46/') || id.includes('node_modules/whatwg-url/')) {
-        return 'window';
+        return 'self';
       }
     },
     plugins: [
@@ -65,8 +67,10 @@ export default [
         tsconfig: 'tsconfig.json',
       }),
       json(),
-      nodeResolve({ preferBuiltins: false }),
-      commonjs(),
+      nodeResolve({ preferBuiltins: false, browser: true }),
+      commonjs({
+        transformMixedEsModules: true,
+      }),
       process.env.NODE_ENV === 'production' && terser(),
     ],
   },
@@ -98,8 +102,10 @@ export default [
         tsconfig: 'tsconfig.json',
       }),
       json(),
-      nodeResolve({ preferBuiltins: false }),
-      commonjs(),
+      nodeResolve({ preferBuiltins: false, browser: true }),
+      commonjs({
+        transformMixedEsModules: true,
+      }),
       process.env.NODE_ENV === 'production' && terser(),
     ],
   },
