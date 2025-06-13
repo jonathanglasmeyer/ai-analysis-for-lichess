@@ -30,9 +30,10 @@ function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElemen
   // Hide all potentially conflicting sections initially, then show the correct one.
   statusDivElement.style.display = 'none';       // Contains usageDisplayElement
   limitReachedElement.style.display = 'none';    // Contains "Bitte melde dich an" text
-  googleLoginBtnElement.style.display = 'none';  // "Weiter mit Google" button
+  // googleLoginBtnElement.style.display = 'none'; // Button visibility handled in specific blocks
 
   if (data.developmentMode) {
+    googleLoginBtnElement.style.display = 'none'; // Hide button in dev mode message display
     usageDisplayElement.textContent = data.message || i18next.t('popup.devModeMessage');
     usageDisplayElement.style.color = '#888';
     statusDivElement.style.display = 'block'; // Ensure status div is visible
@@ -42,14 +43,17 @@ function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElemen
   }
 
   if (user) { // User is logged in
-    // Show usage info for logged-in user. Login prompt elements (limitReachedElement, googleLoginBtnElement) remain hidden from initial clear.
+    googleLoginBtnElement.style.display = 'none'; // Hide button when user is logged in
+    // Show usage info for logged-in user.
     statusDivElement.style.display = 'block';
     usageDisplayElement.style.display = 'block';
     if (data.ok && data.usage) {
       const { current, limit } = data.usage;
-      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
-      usageDisplayElement.style.color = (current >= limit) ? '#c33' : '';
-      console.log(`[DEBUG] updateUsageDisplay: Logged-in user. Usage: ${current}/${limit}`);
+      const remainingAnalyses = limit - current;
+      console.log('[DEBUG POPUP] Before i18n (logged-in): remainingAnalyses =', remainingAnalyses, ', type =', typeof remainingAnalyses, ', current =', current, ', limit =', limit);
+      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { remaining: remainingAnalyses });
+      usageDisplayElement.style.color = (remainingAnalyses <= 0) ? '#c33' : ''; // Red if no analyses left
+      console.log(`[DEBUG] updateUsageDisplay: Logged-in user. Usage: ${current}/${limit} (${remainingAnalyses} remaining)`);
     } else if (data.error) {
       usageDisplayElement.textContent = data.error;
       usageDisplayElement.style.color = '#c33';
@@ -60,21 +64,28 @@ function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElemen
       console.log('[DEBUG] updateUsageDisplay: Logged-in user. Fallback usage display.');
     }
   } else { // No user / Anonymous
-    // Decide whether to show login prompt or usage info for anonymous.
+    googleLoginBtnElement.style.display = 'block'; // Show login button if no user and not in dev mode message path
+
+    // Decide whether to show usage info or "limit reached/login prompt" text.
     // loggedInStateDiv is already hidden by updateUIForAuthState.
     if (data.ok && data.usage && data.usage.current < data.usage.limit) {
-      // Anonymous, within limit: show usage info. Login prompt elements remain hidden.
+      // Anonymous, within limit: show usage info, hide "limit reached" prompt.
       statusDivElement.style.display = 'block';
       usageDisplayElement.style.display = 'block';
+      limitReachedElement.style.display = 'none'; // Hide "Bitte melde dich an"
+
       const { current, limit } = data.usage;
-      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
-      usageDisplayElement.style.color = '';
-      console.log(`[DEBUG] updateUsageDisplay: Anonymous user within limit. Usage: ${current}/${limit}`);
+      const remainingAnalyses = limit - current;
+      console.log('[DEBUG POPUP] Before i18n (anonymous): remainingAnalyses =', remainingAnalyses, ', type =', typeof remainingAnalyses, ', current =', current, ', limit =', limit);
+      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { remaining: remainingAnalyses });
+      usageDisplayElement.style.color = (remainingAnalyses <= 0) ? '#c33' : ''; // Red if no analyses left
+      console.log(`[DEBUG] updateUsageDisplay: Anonymous user within limit. Usage: ${current}/${limit} (${remainingAnalyses} remaining)`);
     } else {
-      // Anonymous, limit reached OR error OR fallback: show login prompt.
+      // Anonymous, limit reached OR error OR fallback: show "limit reached/login prompt", hide usage info.
       limitReachedElement.style.display = 'block';
-      googleLoginBtnElement.style.display = 'block';
-      // statusDiv (usage info) remains hidden.
+      statusDivElement.style.display = 'none'; // Hide usage display
+      usageDisplayElement.style.display = 'none';
+
       if (data.error) {
         console.log('[DEBUG] updateUsageDisplay: Anonymous user. Error loading usage. Showing login prompt. Error:', data.error);
       } else if (data.ok && data.usage) { // Implies limit reached

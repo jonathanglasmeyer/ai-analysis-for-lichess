@@ -63,8 +63,13 @@
   <!-- Limit reached prompt -->
   <div id="limit-reached" style="display:none; margin-top:15px; text-align:center;">
     <p data-i18n="popup.loginPrompt">Please log in to continue using the analysis features.</p>
-    <button id="google-login-btn" class="button" data-i18n="popup.continueWithGoogle">Continue with Google</button>
+    <!-- Google Login Button is now outside this div -->
     <p id="login-error" style="display:none; color: #c33; margin-top: 10px;"></p>
+  </div>
+
+  <!-- Google Login Button Container -->
+  <div id="google-login-btn-container" style="text-align:center; margin-top:10px;">
+    <button id="google-login-btn" class="button" data-i18n="popup.continueWithGoogle">Continue with Google</button>
   </div>
 
   <!-- Logged-in state -->
