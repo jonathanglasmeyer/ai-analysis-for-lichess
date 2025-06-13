@@ -6,6 +6,7 @@
 // Import API key from environment or config
 import { requestUsageData, UsageResponse } from '../services/api';
 import { supabase } from '../supabaseClient';
+import { User } from '@supabase/supabase-js';
 import i18next from 'i18next';
 
 import { setupI18n } from '../i18n';
@@ -23,35 +24,65 @@ function localizeHtml(): void {
   });
 }
 
-function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElement, limitReachedElement: HTMLElement, statusDivElement: HTMLElement): void {
+function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElement, limitReachedElement: HTMLElement, statusDivElement: HTMLElement, googleLoginBtnElement: HTMLButtonElement, user: User | null): void {
+  console.log('[DEBUG] updateUsageDisplay called with data:', data, 'User:', user);
+
+  // Hide all potentially conflicting sections initially, then show the correct one.
+  statusDivElement.style.display = 'none';       // Contains usageDisplayElement
+  limitReachedElement.style.display = 'none';    // Contains "Bitte melde dich an" text
+  googleLoginBtnElement.style.display = 'none';  // "Weiter mit Google" button
+
   if (data.developmentMode) {
     usageDisplayElement.textContent = data.message || i18next.t('popup.devModeMessage');
     usageDisplayElement.style.color = '#888';
     statusDivElement.style.display = 'block'; // Ensure status div is visible
     limitReachedElement.style.display = 'none';
+    console.log('[DEBUG] updateUsageDisplay: Development mode detected.');
     return;
   }
 
-  if (data.ok && data.usage) {
-    const { current, limit } = data.usage;
-    usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
-    if (current >= limit) {
-      usageDisplayElement.style.display = 'none';
-      statusDivElement.style.display = 'none'; // Hide status div as well
-      limitReachedElement.style.display = 'block';
-    } else {
-      usageDisplayElement.style.display = 'block';
-      statusDivElement.style.display = 'block'; // Show status div
-      limitReachedElement.style.display = 'none';
+  if (user) { // User is logged in
+    // Show usage info for logged-in user. Login prompt elements (limitReachedElement, googleLoginBtnElement) remain hidden from initial clear.
+    statusDivElement.style.display = 'block';
+    usageDisplayElement.style.display = 'block';
+    if (data.ok && data.usage) {
+      const { current, limit } = data.usage;
+      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
+      usageDisplayElement.style.color = (current >= limit) ? '#c33' : '';
+      console.log(`[DEBUG] updateUsageDisplay: Logged-in user. Usage: ${current}/${limit}`);
+    } else if (data.error) {
+      usageDisplayElement.textContent = data.error;
+      usageDisplayElement.style.color = '#c33';
+      console.log('[DEBUG] updateUsageDisplay: Logged-in user. Error loading usage:', data.error);
+    } else { // Fallback
+      usageDisplayElement.textContent = i18next.t('popup.errorServer', { status: 'N/A' });
+      usageDisplayElement.style.color = '#c33';
+      console.log('[DEBUG] updateUsageDisplay: Logged-in user. Fallback usage display.');
     }
-  } else if (data.error) {
-    usageDisplayElement.textContent = data.error;
-    usageDisplayElement.style.color = '#c33';
-    statusDivElement.style.display = 'block'; // Ensure status div is visible for errors
-  } else {
-    usageDisplayElement.textContent = i18next.t('popup.errorServer', { status: 'N/A' });
-    usageDisplayElement.style.color = '#c33';
-    statusDivElement.style.display = 'block'; // Ensure status div is visible for errors
+  } else { // No user / Anonymous
+    // Decide whether to show login prompt or usage info for anonymous.
+    // loggedInStateDiv is already hidden by updateUIForAuthState.
+    if (data.ok && data.usage && data.usage.current < data.usage.limit) {
+      // Anonymous, within limit: show usage info. Login prompt elements remain hidden.
+      statusDivElement.style.display = 'block';
+      usageDisplayElement.style.display = 'block';
+      const { current, limit } = data.usage;
+      usageDisplayElement.textContent = i18next.t('popup.usageDisplay', { current, limit });
+      usageDisplayElement.style.color = '';
+      console.log(`[DEBUG] updateUsageDisplay: Anonymous user within limit. Usage: ${current}/${limit}`);
+    } else {
+      // Anonymous, limit reached OR error OR fallback: show login prompt.
+      limitReachedElement.style.display = 'block';
+      googleLoginBtnElement.style.display = 'block';
+      // statusDiv (usage info) remains hidden.
+      if (data.error) {
+        console.log('[DEBUG] updateUsageDisplay: Anonymous user. Error loading usage. Showing login prompt. Error:', data.error);
+      } else if (data.ok && data.usage) { // Implies limit reached
+        console.log('[DEBUG] updateUsageDisplay: Anonymous user. Limit reached. Showing login prompt.');
+      } else { // Fallback
+        console.log('[DEBUG] updateUsageDisplay: Anonymous user. Fallback. Showing login prompt.');
+      }
+    }
   }
 }
 
@@ -60,93 +91,134 @@ function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElemen
  * This function is called after the correct language has been determined.
  * @param language The language code (e.g., 'en', 'de') to use for translations.
  */
-function initializePopup(language: string) {
+async function initializePopup(language: string) {
   setupI18n(language);
   localizeHtml();
 
-  const usageDisplayElement = document.getElementById('usage-display') as HTMLElement;
-  const limitReachedElement = document.getElementById('limit-reached') as HTMLElement;
-  const statusDivElement = document.querySelector('.status') as HTMLElement;
+  const statusDiv = document.querySelector('.status') as HTMLElement;
   const googleLoginBtn = document.getElementById('google-login-btn') as HTMLButtonElement;
-  const loginErrorElement = document.getElementById('login-error') as HTMLElement;
+  const loginError = document.getElementById('login-error') as HTMLParagraphElement;
+  const usageDisplay = document.getElementById('usage-display') as HTMLSpanElement;
+  const limitReachedDiv = document.getElementById('limit-reached') as HTMLDivElement;
+  const loggedInStateDiv = document.getElementById('logged-in-state') as HTMLDivElement;
+  const userIdentifierSpan = document.getElementById('user-identifier') as HTMLSpanElement;
+  const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
 
-  // It's assumed that limitReachedElement contains the entire login prompt UI (text, button, error message)
-  // and statusDivElement contains the usage display.
-
-  if (!usageDisplayElement || !limitReachedElement || !statusDivElement || !googleLoginBtn || !loginErrorElement) {
-    console.error('One or more popup elements are missing from the DOM.');
-    return;
-  }
-
+  // Function to show login error messages
   const showLoginError = (messageKey: string) => {
-    loginErrorElement.textContent = i18next.t(messageKey);
-    loginErrorElement.style.display = 'block';
+    loginError.textContent = i18next.t(messageKey);
+    loginError.style.display = 'block';
   };
 
   const clearLoginError = () => {
-    loginErrorElement.textContent = '';
-    loginErrorElement.style.display = 'none';
+    loginError.textContent = '';
+    loginError.style.display = 'none';
   };
 
-  // Supabase Auth State Change Listener
   if (supabase) {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth event:', event, session);
-      // Clear any previous login errors on auth state change
-      clearLoginError(); 
+    // Initial check for user session and update UI
+    console.log('[POPUP_INIT] Attempting to get user from Supabase (should check localStorage due to persistSession:true)...');
+    const { data: { user: initialUser }, error: getUserError } = await supabase.auth.getUser();
+    
+    if (getUserError) {
+      console.error('[POPUP_INIT] Error calling supabase.auth.getUser():', getUserError);
+    }
+    console.log('[POPUP_INIT] supabase.auth.getUser() completed. User:', initialUser ? initialUser.id : 'null');
+    
+    updateUIForAuthState(initialUser);
+    if (initialUser) {
+      console.log('[POPUP_INIT] User found by getUser(). UI updated for logged-in state. User ID:', initialUser.id, 'Email:', initialUser.email);
+    } else {
+      console.log('[POPUP_INIT] No active user session found by getUser(). UI updated for logged-out state.');
+    }
 
-      if (event === 'SIGNED_IN') {
-        console.log('User signed in:', session?.user?.id);
-        limitReachedElement.style.display = 'none'; // Hide login prompt section
-        statusDivElement.style.display = 'block';    // Ensure usage/status is visible
-        usageDisplayElement.style.display = 'block'; // Ensure usage text is visible
-        // Fetch usage data for authenticated user
-        requestUsageData()
-          .then(data => updateUsageDisplay(data, usageDisplayElement, limitReachedElement, statusDivElement))
-          .catch(error => {
-            console.error('Error fetching usage data after sign in:', error);
-            usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
-            usageDisplayElement.style.color = '#c33';
-          });
-      } else if (event === 'SIGNED_OUT') {
-        console.log('User signed out');
-        // updateUsageDisplay will handle showing the login prompt (via limitReachedElement) 
-        // or anonymous usage based on the fetched data.
-        // Ensure statusDiv (which contains usageDisplay) is potentially visible before updateUsageDisplay hides it if limit is reached.
-        statusDivElement.style.display = 'block'; 
-        limitReachedElement.style.display = 'block'; // Make sure the container for login is visible
-        // Fetch usage data for anonymous user
-        requestUsageData()
-          .then(data => updateUsageDisplay(data, usageDisplayElement, limitReachedElement, statusDivElement))
-          .catch(error => {
-            console.error('Error fetching usage data after sign out:', error);
-            usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
-            usageDisplayElement.style.color = '#c33';
-          });
-      } else if (event === 'INITIAL_SESSION') {
-        console.log('Initial session:', session);
-        if (session) {
-            limitReachedElement.style.display = 'none'; 
-            statusDivElement.style.display = 'block';
-            usageDisplayElement.style.display = 'block';
-        } else {
-            // No initial session, updateUsageDisplay will handle showing login prompt if needed
-            statusDivElement.style.display = 'block'; 
-            limitReachedElement.style.display = 'block';
-        }
-        // Fetch initial usage data, updateUsageDisplay will correctly show login or usage
-        requestUsageData()
-          .then(data => updateUsageDisplay(data, usageDisplayElement, limitReachedElement, statusDivElement))
-          .catch(error => {
-            console.error('Error fetching initial usage data:', error);
-            usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
-            usageDisplayElement.style.color = '#c33';
-          });
+    // Listen for auth state changes
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[POPUP_AUTH_CHANGE] Event: ${event}, Session User: ${session?.user?.id || 'null'}`);
+      const currentUser = session?.user ?? null;
+      console.log(`[POPUP_AUTH_CHANGE] Current user determined: ${currentUser ? currentUser.id : 'null'}. Calling updateUIForAuthState.`);
+      updateUIForAuthState(currentUser); // Sets basic UI visibility (logged-in section vs. not)
+      if (currentUser) {
+        console.log(`[POPUP_AUTH_CHANGE] UI should now reflect LOGGED-IN state for user ${currentUser.id}.`);
+      } else {
+        console.log(`[POPUP_AUTH_CHANGE] UI should now reflect LOGGED-OUT state.`);
       }
-    });
-  } else {
-    console.error('Supabase client not initialized, cannot listen for auth changes.');
-  }
+
+      console.log('[DEBUG] onAuthStateChange: Calling requestUsageData for event:', event, 'with user:', currentUser);
+      requestUsageData()
+        .then(usageData => {
+          console.log('[DEBUG] onAuthStateChange: requestUsageData resolved:', usageData);
+          // updateUsageDisplay will show/hide the limitReachedDiv (login prompt)
+          // or the usageDisplay based on the fetched data.
+          updateUsageDisplay(usageData, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, currentUser);
+
+          if (currentUser) {
+            // If a user is confirmed (either from INITIAL_SESSION with a user, or SIGNED_IN),
+            // clear any pre-existing login errors.
+            clearLoginError();
+          }
+        })
+        .catch(error => {
+          console.error('[DEBUG] onAuthStateChange: requestUsageData failed:', error);
+          console.error('Error fetching usage data on auth state change:', error);
+          // Display a generic error in the usage display area
+          usageDisplay.textContent = i18next.t('popup.errorNetwork');
+          usageDisplay.style.color = '#c33';
+          statusDiv.style.display = 'block'; // Ensure status div (containing usageDisplay) is visible
+
+          if (!currentUser) {
+            // If there's no user and fetching usage data failed,
+            // ensure the login prompt is visible so the user can try to log in.
+            limitReachedDiv.style.display = 'block';
+            usageDisplay.style.display = 'none'; // Hide the "Nutzung wird geladen" or error text
+            statusDiv.style.display = 'none'; // Hide the status div as well
+            console.log('[DEBUG] onAuthStateChange (catch): No current user and request failed. Showing login prompt.');
+          } else {
+            // If there IS a user and data fetch failed, just show error in usageDisplay.
+            // LoggedInStateDiv is already visible from updateUIForAuthState(currentUser).
+            // limitReachedDiv should remain hidden.
+            limitReachedDiv.style.display = 'none';
+          }
+        });
+
+      if (event === 'INITIAL_SESSION') {
+        console.log('[DEBUG] onAuthStateChange: INITIAL_SESSION event. User from session:', currentUser);
+        if (currentUser) {
+          console.log('[DEBUG] onAuthStateChange: INITIAL_SESSION with user. UI should update to logged-in.');
+        } else {
+          console.log('[DEBUG] onAuthStateChange: INITIAL_SESSION with NO user. UI should update to logged-out.');
+        }
+      }
+      if (event === 'SIGNED_IN') {
+        console.log('[DEBUG] onAuthStateChange: SIGNED_IN event. User from session:', currentUser);
+      }
+      if (event === 'SIGNED_OUT') {
+        console.log('[DEBUG] onAuthStateChange: SIGNED_OUT event. User should be null:', currentUser);
+      }
+    }); // End of onAuthStateChange listener's main logic block, before the .then().catch() for requestUsageData
+    // The requestUsageData().then().catch() block was already correctly placed after updateUIForAuthState(currentUser)
+    // and within the onAuthStateChange handler. The duplicated error logging inside INITIAL_SESSION was the main issue there.
+
+    // Add event listener for logout button once
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', async () => {
+        if (supabase) {
+          try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              console.error('Error logging out:', error);
+              // Optionally, show an error message to the user
+              // showLoginError('popup.error.logoutFailed'); 
+            }
+            // UI update is handled by onAuthStateChange
+          } catch (e) {
+            console.error('Exception during logout:', e);
+            // showLoginError('popup.error.logoutFailed');
+          }
+        }
+      });
+    }
+  } // End of if (supabase) block
 
   googleLoginBtn.addEventListener('click', async () => {
     clearLoginError();
@@ -157,7 +229,6 @@ function initializePopup(language: string) {
       return;
     }
 
-    try {
       // 1. Generate a raw nonce.
       const rawNonce = Math.random().toString(36).substring(2);
 
@@ -186,69 +257,85 @@ function initializePopup(language: string) {
       authUrl.searchParams.append('scope', 'openid email profile');
       authUrl.searchParams.append('nonce', hashedNonce);
 
-      console.log('Launching web auth flow...');
+      console.log('Popup: Auth URL created:', authUrl.href);
+      console.log('Popup: Raw nonce:', rawNonce);
+      console.log('Popup: Hashed nonce:', hashedNonce);
+      console.log('Popup: Sending GOOGLE_LOGIN message to background script...');
 
-      const resultUrl = await new Promise<string>((resolve, reject) => {
-        chrome.identity.launchWebAuthFlow(
-          { url: authUrl.href, interactive: true },
-          (responseUrl?: string) => {
-            if (chrome.runtime.lastError) {
-              return reject(chrome.runtime.lastError);
-            }
-            if (!responseUrl) {
-              return reject(new Error('Authentication flow was cancelled by the user.'));
-            }
-            resolve(responseUrl);
+      // Disable button to prevent multiple clicks while processing
+      googleLoginBtn.disabled = true;
+
+      chrome.runtime.sendMessage(
+        { 
+          type: 'GOOGLE_LOGIN',
+          authUrl: authUrl.toString(),
+          rawNonce: rawNonce,
+          lang: i18next.language, // Pass current language to background script 
+        }, 
+        (response) => {
+          // Re-enable button once response is received or error occurs
+          googleLoginBtn.disabled = false;
+
+          if (chrome.runtime.lastError) {
+            console.error('Popup: Error communicating with background script:', chrome.runtime.lastError.message);
+            showLoginError('popup.error.internal');
+            return;
           }
-        );
-      });
 
-      const url = new URL(resultUrl);
-      const params = new URLSearchParams(url.hash.substring(1));
-      const idToken = params.get('id_token');
-
-      if (!idToken) {
-        throw new Error('ID token not found in authentication response.');
-      }
-
-      console.log('ID Token extracted, signing in with Supabase...');
-
-      // 4. Send the raw nonce to Supabase.
-      const { data, error } = await supabase.auth.signInWithIdToken({
-        provider: 'google',
-        token: idToken,
-        nonce: rawNonce,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      console.log('Successfully signed in with Supabase:', data.user);
-    } catch (error: unknown) {
-      console.error('An error occurred during Google sign-in:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage.includes('cancelled by the user')) {
-        showLoginError('popup.error.userCancelled');
-      } else {
-        showLoginError('popup.error.googleAuth');
-      }
-    }
+          if (response && response.success && response.user) {
+            console.log('Popup: Login successful via background script. User:', response.user);
+            // UI update will primarily be handled by onAuthStateChange due to shared localStorage session.
+            // For this specific popup instance, we can proactively update.
+            updateUIForAuthState(response.user); 
+            requestUsageData().then(usageResponse => {
+              updateUsageDisplay(usageResponse, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
+              clearLoginError();
+            }).catch(err => {
+              console.error("Failed to fetch usage data after login (via background):", err);
+              // Display a generic error or the specific one from usage data call
+              updateUsageDisplay({ ok: false, error: i18next.t('popup.error.fetchUsage') }, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, response.user);
+            });
+          } else {
+            console.error('Popup: Login failed via background script:', response?.error);
+            showLoginError(response?.errorKey || 'popup.error.googleAuth');
+          }
+        }
+      );
   });
+
+  // Function to update UI based on authentication state
+  function updateUIForAuthState(user: User | null) {
+  console.log('[DEBUG] updateUIForAuthState called with user:', user);
+    if (user) {
+      // User is logged in
+      loggedInStateDiv.style.display = 'block';
+      if (user.email) {
+        userIdentifierSpan.textContent = user.email;
+      } else {
+        userIdentifierSpan.textContent = i18next.t('popup.error.noEmail'); // Fallback if email is not available
+      }
+    } else {
+      loggedInStateDiv.style.display = 'none';
+      // Visibility of login prompt elements (limitReachedDiv, googleLoginBtn)
+      // is now fully handled by updateUsageDisplay.
+    }
+  }
 
   // Initial fetch and display of usage data is now primarily handled by INITIAL_SESSION event in onAuthStateChange.
   // This block serves as a fallback if Supabase client isn't initialized,
   // ensuring usage data is still fetched.
   if (!supabase) {
     console.log('Supabase not initialized, fetching usage data with fallback logic.');
+    // In this block, supabase is not available, so we cannot fetch initialUserForFallback.
+    // We directly call requestUsageData and pass null for the user to updateUsageDisplay.
     requestUsageData()
       .then((data: UsageResponse) => {
-        updateUsageDisplay(data, usageDisplayElement, limitReachedElement, statusDivElement);
+        updateUsageDisplay(data, usageDisplay, limitReachedDiv, statusDiv, googleLoginBtn, null); // Pass null as user for this case
       })
       .catch((error: Error) => {
         console.error('Error fetching usage data (Supabase not init fallback):', error);
-        usageDisplayElement.textContent = i18next.t('popup.errorNetwork');
-        usageDisplayElement.style.color = '#c33';
+        usageDisplay.textContent = i18next.t('popup.errorNetwork');
+        usageDisplay.style.color = '#c33';
       });
   }
   // Note: The main initializePopup function's closing brace is here.

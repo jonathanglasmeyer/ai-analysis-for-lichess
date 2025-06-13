@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config';
+import { chromeStorageLocalAdapter } from './chromeStorageAdapter';
 
 let supabase: SupabaseClient | null = null;
 
@@ -9,9 +10,11 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       // It's recommended to store the JWT in Extension storage, 
       // rather than localStorage for security reasons.
       // We will handle this manually when auth state changes.
-      persistSession: false, 
+      // Setting to true to allow Supabase to handle session persistence via localStorage.
+      persistSession: true, 
       autoRefreshToken: true,
-      detectSessionInUrl: true
+      detectSessionInUrl: true,
+      storage: chromeStorageLocalAdapter, // Use chrome.storage.local for persistence
     },
   });
 } else {

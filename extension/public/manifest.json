@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "key": "MIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQCN6BDKouS+yKvWLgEVXvbGQs8cH60llfCF39q+7fVuvuZArGrDR6S/LqKp36ww/wOSWt6OnflyRYLCRh1FSufPsyX3v/eX4kzhm5NzYNm9aOlkYErsuaCr7yBBZwil+5hm6K+OJI5X7COKj41W5WuJ0aIjS2eQJ+zzd1YRyxyL08KrUkgbj3BfnZcEOE2zt2sA5ClhVEPC32X6E2bz/hCW8HgqwghZkG7ej7rc5fMt3vIcxlcz2H3Gbhbl2HshBTRfnUBkwgIzTjudevnpK4gEo6Jn3N8+BPWO5obx90Cix5zKE54D48dlKvVJKzP9k3gqB7/ITvL89ARI1seBQJE9AgMBAAECgf8KJhn+RevhbdqB65OoQq22S4HXQRJZg3KG1UM1XPUHNphmtN7846aVnFMNYjHMi3+E9E2Ukr9IFk6w6Q8JNLBX+XRBdLG1J1hBrDzbpXc4Y7WYuCwrI98/e7jAA8BLiBEAHfbot1KzDaUTqXRfexB11iKoELi9C0sfeM8Uq2bE5H1mLAnqtWOHZm6isUe4mvr+AAoT78RGcnY20ZdYkRPl1Sy/palymm/HB/zfF4abWMb5L62Nwi1GB3MZLaxZnRvbpd6Y/1FahzufqtsUMXQcnEzz0mr0JBGUmHOMPzUFR+OnVmB7Ox+4Xs0cJHp1uWKrgSpWZ8Bos7ZhemvxB2kCgYEAv5FtSDWa1SdcIlvwh3sdyR2uok1end/SdPU7ck8cSV8GjpO3l3b4tbDTiks6mBy3FPhqQEPNHn36YeFtEJLc364d4a5kdEenGiGTVJoCeK4xZXDd4x7+Q/la7MlYuGX50exMdLO+0yD+1urp1nwgPlOvFm2eV84EbJoaBl2GrHUCgYEAvaKhzr7s1mimV/0asDGQcJzzstAHcs9nzai1ql+kIV3ES/lZ1Bv0bo9xvzFaIcxonGr806It+4Tnb8p+pf5ScQ26SWO3XDAEGJLjnVeF9XvLrPiSlfrWrUFpb3DmOaZ0/VZkpwPKPfIBDMFUfMS8VDLFELqM0MZOVO585Te+2KkCgYBZnWxj9T+jKzB8mkng9wUuCgahwlPawtOvBvFyPfPblup4VD30SyF5zWiILz0P34797l+2BIG2G/S/STc+I5XTxZ4Q7wXrJ4HSRZaoYwt47PQKokwKbXtAzSttzZsFWB8PxtzVUyiXl73fSDFvts1WmsszUMBcDvIe48/83k+b6QKBgQC2PgMOc0GcU/n4eU8aoKdU8iDpaS6fUV9Kr6XWVA+h2UD6WmnPhAYF8mi3+y/JZ23pVJAguq1CGFlqf8nysFR+PVkXinL+b06gZxnDbgdZAV2dn00QQX3qBwDSjkdSg/vOMyaLswK7QUVtAqa1OURcDmaASydkxA8nZAI3LrmD8QKBgH1z5sVrT5NsyjrSvD7qG7RoCOvqbXqM7QUQltjjTccdIv7DBFR7z3vY/BXFxva1xoFJS3BKpiGkDg4GfJKxO4F/nM1eFIiL//FT9DZ9Z6o0P4yM14V/1jO0RR9S+lSLz0QAdxA02IELwZ+K9z2W9kdVsQ4G54m4CjQvYU76FRWh",
   "description": "Integriert KI-gestützte Schachanalysen direkt in Lichess",
-  "permissions": ["storage", "activeTab", "identity"],
+  "permissions": ["storage", "activeTab", "identity", "notifications"],
   "host_permissions": [
     "https://lichess.org/*",
     "http://localhost:3001/*",
@@ -35,5 +35,11 @@
   ],
   "action": {
     "default_popup": "popup.html"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [ "icons/icon128.png" ],
+      "matches": [ "<all_urls>" ]
+    }
+  ]
 }

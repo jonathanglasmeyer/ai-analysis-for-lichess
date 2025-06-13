@@ -29,9 +29,13 @@ const resources = {
       'popup.continueWithGoogle': 'Continue with Google',
       'popup.error.googleAuth': 'Google authentication failed. Please try again.',
       'popup.error.userCancelled': 'Authentication cancelled by user.',
+      'popup.loggedInAs': 'Logged in as:',
+      'popup.logout': 'Logout',
       'popup.error.supabaseLogin': 'Supabase login failed. Please try again.',
       'error.serverConnection': 'Could not connect to the server. Please check your connection.',
-      'error.unknownAnalysisError': 'An unknown error occurred during the analysis.'
+      'error.unknownAnalysisError': 'An unknown error occurred during the analysis.',
+      'notification.login.title': 'Login Successful',
+      'notification.login.message': 'You are now logged in. Please click the extension icon again to continue.'
     }
   },
   de: {
@@ -62,9 +66,13 @@ const resources = {
       'popup.continueWithGoogle': 'Weiter mit Google',
       'popup.error.googleAuth': 'Google-Authentifizierung fehlgeschlagen. Bitte erneut versuchen.',
       'popup.error.userCancelled': 'Authentifizierung vom Benutzer abgebrochen.',
+      'popup.loggedInAs': 'Angemeldet als:',
+      'popup.logout': 'Abmelden',
       'popup.error.supabaseLogin': 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',
       'error.serverConnection': 'Verbindung zum Server fehlgeschlagen. Bitte prüfe deine Verbindung.',
-      'error.unknownAnalysisError': 'Ein unbekannter Fehler ist während der Analyse aufgetreten.'
+      'error.unknownAnalysisError': 'Ein unbekannter Fehler ist während der Analyse aufgetreten.',
+      'notification.login.title': 'Anmeldung erfolgreich',
+      'notification.login.message': 'Du bist jetzt angemeldet. Bitte klicke erneut auf das Extension-Icon, um fortzufahren.'
     }
   },
   // Französisch
@@ -94,8 +102,12 @@ const resources = {
       'popup.errorServer': 'Erreur du serveur (Statut : {{status}}). Veuillez réessayer plus tard.',
       'popup.loginPrompt': 'Veuillez vous connecter pour continuer à utiliser les fonctionnalités d\'analyse.',
       'popup.continueWithGoogle': 'Continuer avec Google',
+      'notification.login.title': 'Connexion réussie',
+      'notification.login.message': 'Vous êtes maintenant connecté. Veuillez cliquer à nouveau sur l\'icône de l\'extension pour continuer.',
       'popup.error.googleAuth': 'L\'authentification Google a échoué. Veuillez réessayer.',
       'popup.error.userCancelled': 'Authentification annulée par l\'utilisateur.',
+      'popup.loggedInAs': 'Connecté en tant que :',
+      'popup.logout': 'Déconnexion',
       'popup.error.supabaseLogin': 'La connexion à Supabase a échoué. Veuillez réessayer.',
       'error.serverConnection': 'Impossible de se connecter au serveur. Veuillez vérifier votre connexion.',
       'error.unknownAnalysisError': 'Une erreur inconnue est survenue lors de l\'analyse.'
@@ -128,8 +140,12 @@ const resources = {
       'popup.errorServer': 'Error del servidor (Estado: {{status}}). Por favor, inténtelo de nuevo más tarde.',
       'popup.loginPrompt': 'Por favor, inicia sesión para seguir utilizando las funciones de análisis.',
       'popup.continueWithGoogle': 'Continuar con Google',
+      'notification.login.title': 'Inicio de sesión exitoso',
+      'notification.login.message': 'Has iniciado sesión. Por favor, haz clic de nuevo en el icono de la extensión para continuar.',
       'popup.error.googleAuth': 'La autenticación de Google falló. Por favor, inténtelo de nuevo.',
       'popup.error.userCancelled': 'Autenticación cancelada por el usuario.',
+      'popup.loggedInAs': 'Conectado como:',
+      'popup.logout': 'Cerrar sesión',
       'popup.error.supabaseLogin': 'El inicio de sesión en Supabase falló. Por favor, inténtelo de nuevo.',
       'error.serverConnection': 'No se pudo conectar al servidor. Por favor, compruebe su conexión.',
       'error.unknownAnalysisError': 'Ocurrió un error desconocido durante el análisis.'
@@ -162,8 +178,12 @@ const resources = {
       'popup.errorServer': 'Errore del server (Stato: {{status}}). Riprova più tardi.',
       'popup.loginPrompt': 'Effettua il login per continuare a utilizzare le funzioni di analisi.',
       'popup.continueWithGoogle': 'Continua con Google',
+      'notification.login.title': 'Accesso riuscito',
+      'notification.login.message': 'Hai effettuato l\'accesso. Fai di nuovo clic sull\'icona dell\'estensione per continuare.',
       'popup.error.googleAuth': 'Autenticazione Google non riuscita. Riprova.',
       'popup.error.userCancelled': 'Autenticazione annullata dall\'utente.',
+      'popup.loggedInAs': 'Connesso come:',
+      'popup.logout': 'Disconnetti',
       'popup.error.supabaseLogin': 'Accesso a Supabase non riuscito. Riprova.',
       'error.serverConnection': 'Impossibile connettersi al server. Controlla la tua connessione.',
       'error.unknownAnalysisError': 'Si è verificato un errore sconosciuto durante l\'analisi.'
@@ -196,8 +216,12 @@ const resources = {
       'popup.errorServer': 'Błąd serwera (Status: {{status}}). Spróbuj ponownie później.',
       'popup.loginPrompt': 'Zaloguj się, aby kontynuować korzystanie z funkcji analizy.',
       'popup.continueWithGoogle': 'Kontynuuj z Google',
+      'notification.login.title': 'Logowanie udane',
+      'notification.login.message': 'Jesteś zalogowany. Kliknij ponownie ikonę rozszerzenia, aby kontynuować.',
       'popup.error.googleAuth': 'Uwierzytelnianie Google nie powiodło się. Spróbuj ponownie.',
       'popup.error.userCancelled': 'Uwierzytelnianie anulowane przez użytkownika.',
+      'popup.loggedInAs': 'Zalogowano jako:',
+      'popup.logout': 'Wyloguj',
       'popup.error.supabaseLogin': 'Logowanie do Supabase nie powiodło się. Spróbuj ponownie.',
       'error.serverConnection': 'Nie można połączyć się z serwerem. Sprawdź swoje połączenie.',
       'error.unknownAnalysisError': 'Wystąpił nieznany błąd podczas analizy.'
@@ -230,8 +254,12 @@ const resources = {
       'popup.errorServer': 'Erro do servidor (Status: {{status}}). Por favor, tente novamente mais tarde.',
       'popup.loginPrompt': 'Faça login para continuar usando os recursos de análise.',
       'popup.continueWithGoogle': 'Continuar com o Google',
+      'notification.login.title': 'Login bem-sucedido',
+      'notification.login.message': 'Você está conectado. Por favor, clique no ícone da extensão novamente para continuar.',
       'popup.error.googleAuth': 'A autenticação do Google falhou. Por favor, tente novamente.',
       'popup.error.userCancelled': 'Autenticação cancelada pelo usuário.',
+      'popup.loggedInAs': 'Logado como:',
+      'popup.logout': 'Sair',
       'popup.error.supabaseLogin': 'O login no Supabase falhou. Por favor, tente novamente.',
       'error.serverConnection': 'Não foi possível conectar ao servidor. Por favor, verifique sua conexão.',
       'error.unknownAnalysisError': 'Ocorreu um erro desconhecido durante a análise.'
@@ -264,8 +292,12 @@ const resources = {
       'popup.errorServer': 'Serverfout (Status: {{status}}). Probeer het later opnieuw.',
       'popup.loginPrompt': 'Log in om de analysefuncties te blijven gebruiken.',
       'popup.continueWithGoogle': 'Doorgaan met Google',
+      'notification.login.title': 'Inloggen gelukt',
+      'notification.login.message': 'Je bent nu ingelogd. Klik opnieuw op het extensiepictogram om door te gaan.',
       'popup.error.googleAuth': 'Google-authenticatie mislukt. Probeer het opnieuw.',
       'popup.error.userCancelled': 'Authenticatie geannuleerd door gebruiker.',
+      'popup.loggedInAs': 'Ingelogd als:',
+      'popup.logout': 'Uitloggen',
       'popup.error.supabaseLogin': 'Supabase-login mislukt. Probeer het opnieuw.',
       'error.serverConnection': 'Kon geen verbinding maken met de server. Controleer je verbinding.',
       'error.unknownAnalysisError': 'Er is een onbekende fout opgetreden tijdens de analyse.'

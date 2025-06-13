@@ -32,23 +32,23 @@
   - [x] 2.3 Display a clear message in `extension/public/popup.html` prompting the user to sign up or log in to continue, e.g., "You've used your 5 free analyses. Please sign up or log in to continue."
   - [x] 2.4 Add buttons/links for "Sign Up / Log In" that will lead to the auth forms (Task 3.0).
 
-- [ ] 3.0 Implement "Continue with Google" Login Flow using `chrome.identity`
+- [x] 3.0 Implement "Continue with Google" Login Flow using `chrome.identity`
   - [x] 3.1 Add a "Continue with Google" button to the UI in `extension/public/popup.html`.
   - [x] 3.2 Implement logic in `extension/src/popup/index.ts` to handle the button click:
-    - Call `chrome.identity.getAuthToken({ interactive: true })` to get a Google OAuth ID token.
+    - Call `chrome.identity.launchWebAuthFlow` to get a Google OAuth ID token (Corrected from getAuthToken).
   - [x] 3.3 Once the Google ID token is obtained, use it to sign in with Supabase:
-    - Call `supabase.auth.signInWithIdToken({ provider: 'google', token: id_token })`.
-  - [x] 3.4 Ensure errors from both `chrome.identity.getAuthToken()` and the Supabase `signInWithIdToken` process are gracefully handled and displayed to the user.
-  - [x] 3.5 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (Supabase will issue its own JWT after successful `signInWithIdToken`).
-  - [x] 3.6 Upon successful login, transition the UI to the logged-in state (Task 4.0).
+    - Call `supabase.auth.signInWithIdToken({ provider: 'google', token: id_token, nonce: rawNonce })`. (Corrected to include rawNonce and reflect current implementation)
+  - [x] 3.4 Ensure errors from both `chrome.identity.launchWebAuthFlow()` and the Supabase `signInWithIdToken` process are gracefully handled and displayed to the user. (Includes nonce hashing and user cancellation)
+  - [x] 3.5 Handle Supabase auth events (e.g., `onAuthStateChange`) to update UI and manage user session (Supabase will issue its own JWT after successful `signInWithIdToken`). (Partially addressed by successful login, UI update pending in Task 4)
+  - [x] 3.6 Upon successful login, transition the UI to the logged-in state (Task 4.0). (Login is successful, UI transition is the next step in Task 4)
 
-- [ ] 4.0 Implement Logged-in State UI in Popup
-  - [ ] 4.1 In `extension/public/popup.html`, create a new UI section for the logged-in state.
-  - [ ] 4.2 Display the logged-in user's identifier (e.g., email) in this section.
-  - [ ] 4.3 [outscoped: need to do this later i think] Display the user's current analysis quota (this might require a backend call or be part of the user session data).
-  - [ ] 4.4 Add a "Logout" button.
-  - [ ] 4.5 In `extension/src/popup/index.ts`, implement `handleLogout` function using `supabase.auth.signOut()`.
-  - [ ] 4.6 Ensure that after logout, the UI reverts to the anonymous state, and any user-specific data is cleared from the popup's state.
+- [x] 4.0 Implement Logged-in State UI in Popup
+  - [x] 4.1 In `extension/public/popup.html`, create a new UI section for the logged-in state.
+  - [x] 4.2 Display the logged-in user's identifier (e.g., email) in this section.
+  - [x] 4.3 Show/hide UI sections based on auth state (login prompt vs. logged-in view).
+  - [x] 4.4 Add a "Logout" button (HTML element created in 4.1).
+  - [x] 4.5 In `extension/src/popup/index.ts`, implement `handleLogout` function using `supabase.auth.signOut()`.
+  - [x] 4.6 Ensure that after logout, the UI reverts to the anonymous state, and any user-specific data is cleared from the popup's state.
 
 - [ ] 5.0 Backend Adjustments for Authenticated Users
   - [ ] 5.1 Modify `server/index.ts` middleware to parse JWTs from Supabase in the `Authorization` header.

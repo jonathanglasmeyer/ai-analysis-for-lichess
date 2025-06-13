@@ -30,7 +30,9 @@
     }
     
     .button {
-      display: inline-block;
+      display: block; /* Geändert von inline-block */
+      width: fit-content; /* Passt die Breite an den Inhalt an */
+      max-width: 200px; /* Verhindert, dass der Button zu breit wird */
       padding: 8px 15px;
       background: #3893E8;
       color: white;
@@ -39,7 +41,10 @@
       cursor: pointer;
       font-weight: bold;
       margin-top: 10px;
+      margin-left: auto; /* Für die Zentrierung */
+      margin-right: auto; /* Für die Zentrierung */
       text-decoration: none;
+      text-align: center; /* Stellt sicher, dass der Text im Button zentriert ist, falls padding ihn verschiebt */
     }
     
     .button:hover {
@@ -60,6 +65,12 @@
     <p data-i18n="popup.loginPrompt">Please log in to continue using the analysis features.</p>
     <button id="google-login-btn" class="button" data-i18n="popup.continueWithGoogle">Continue with Google</button>
     <p id="login-error" style="display:none; color: #c33; margin-top: 10px;"></p>
+  </div>
+
+  <!-- Logged-in state -->
+  <div id="logged-in-state" style="display:none; margin-top:15px; text-align:center;">
+    <p><span data-i18n="popup.loggedInAs">Logged in as:</span> <span id="user-identifier"></span></p>
+    <button id="logout-btn" class="button" data-i18n="popup.logout">Logout</button>
   </div>
   
   <script src="popup.js"></script>

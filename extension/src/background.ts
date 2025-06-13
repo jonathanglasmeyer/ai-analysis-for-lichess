@@ -3,6 +3,7 @@
  */
 import { SERVER_URL, CHESS_GPT_API_KEY } from './config';
 import { supabase } from './supabaseClient';
+import i18next, { setupI18n } from './i18n';
 
 // Log Supabase client status on startup
 if (supabase) {
@@ -53,6 +54,105 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true; // Indicates asynchronous response
   }
 
+  // Handle Google Login requests from popup
+  if (message.type === 'GOOGLE_LOGIN') {
+    console.log('Background: Processing GOOGLE_LOGIN request', message);
+    const { authUrl, rawNonce } = message;
+
+    if (!supabase) {
+      console.error('Background: Supabase client not initialized for GOOGLE_LOGIN.');
+      sendResponse({ success: false, error: 'Supabase client not available in background.', errorKey: 'popup.error.supabaseInit' });
+      return false; // Synchronous response for this specific error
+    }
+
+    (async () => {
+      try {
+        const resultUrl = await new Promise<string>((resolve, reject) => {
+          chrome.identity.launchWebAuthFlow(
+            { url: authUrl, interactive: true },
+            (responseUrl?: string) => {
+              if (chrome.runtime.lastError) {
+                console.error('Background: launchWebAuthFlow error:', chrome.runtime.lastError.message);
+                return reject(new Error(chrome.runtime.lastError.message || 'Authentication flow error.'));
+              }
+              if (!responseUrl) {
+                console.warn('[BACKGROUND] GOOGLE_LOGIN: Authentication flow was cancelled by the user or failed (responseUrl is undefined).');
+                sendResponse({ success: false, error: 'Authentication flow cancelled or failed.', errorKey: 'popup.error.userCancelled' });
+                return;
+              }
+              console.log('[BACKGROUND] GOOGLE_LOGIN: Auth flow successful, result URL:', responseUrl);
+              resolve(responseUrl);
+            }
+          );
+        });
+
+        const url = new URL(resultUrl);
+        const params = new URLSearchParams(url.hash.substring(1)); // Google puts params in hash for ID token
+        const idToken = params.get('id_token');
+
+        if (!idToken) {
+          console.error('[BACKGROUND] GOOGLE_LOGIN: ID token not found in auth response. Full response URL might be missing hash or id_token parameter.');
+          sendResponse({ success: false, error: 'ID token not found.', errorKey: 'popup.error.googleAuth' });
+          return;
+        }
+
+        console.log('[BACKGROUND] GOOGLE_LOGIN: Extracted ID Token (first 10 chars):', idToken.substring(0, 10));
+        console.log('[BACKGROUND] GOOGLE_LOGIN: ID Token extracted, attempting Supabase sign-in...');
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithIdToken({
+          provider: 'google',
+          token: idToken,
+          nonce: rawNonce, // Use the raw nonce here for Supabase to verify
+        });
+
+        if (signInError) {
+          console.error('[BACKGROUND] GOOGLE_LOGIN: Supabase signInWithIdToken error:', signInError.message, signInError);
+          sendResponse({ success: false, error: signInError.message, errorKey: 'popup.error.supabaseSignIn' });
+          return;
+        }
+
+        if (signInData.user) {
+          console.log(`[BACKGROUND] GOOGLE_LOGIN: Successfully signed in with Supabase. User ID: ${signInData.user.id} Email: ${signInData.user.email}`);
+
+          // Initialize i18n to show notification in the correct language
+          // The language is sent from the popup
+          await setupI18n(message.lang || 'en');
+
+          // Show notification to guide the user
+          const notificationId = `login-success-${Date.now()}`;
+          console.log('[BACKGROUND] Attempting to create notification...');
+          chrome.notifications.create(notificationId, {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+            title: i18next.t('notification.login.title'),
+            message: i18next.t('notification.login.message'),
+            priority: 2
+          }, (createdId) => {
+            if (chrome.runtime.lastError) {
+              console.error('[BACKGROUND] Notification creation failed:', chrome.runtime.lastError.message);
+            } else {
+              console.log(`[BACKGROUND] Notification successfully created with ID: ${createdId}`);
+            }
+          });
+
+          sendResponse({ success: true, user: signInData.user });
+        } else {
+          console.warn('[BACKGROUND] GOOGLE_LOGIN: Supabase signInWithIdToken did not return a user, though no error was reported. Response data:', signInData);
+          sendResponse({ success: false, error: 'No user data returned from Supabase.', errorKey: 'popup.error.supabaseNoUser' });
+        }
+      } catch (error: unknown) {
+        console.error('Background: An error occurred during Google sign-in:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        let errorKey = 'popup.error.googleAuth'; // Default error key
+        if (errorMessage.includes('cancelled by the user')) {
+          errorKey = 'popup.error.userCancelled';
+        }
+        sendResponse({ success: false, error: errorMessage, errorKey });
+      }
+    })(); // Immediately invoke async function
+
+    return true; // Indicates async response will be sent
+  }
+
   if (message.type === 'ANALYZE_PGN') {
     console.log('Processing ANALYZE_PGN request');
     console.log('[LOCALE] Background received locale:', message.locale);
@@ -65,7 +165,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         console.log('Analysis result (raw):', JSON.stringify(result));
         
         // Stelle sicher, dass die Antwort konsistent ist
-        let response: any = {
+        const response: any = {
           success: true,
           ...result
         };
@@ -172,7 +272,7 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
     console.log('[LOCALE] Cache check with locale:', locale);
     
     // Normalisiere PGN (Entferne Kommentare, Leerzeilen, etc.)
-    const normalizedPgn = pgn.replace(/\{[^\}]*\}/g, '').replace(/\([^\)]*\)/g, '').trim();
+    const normalizedPgn = pgn.replace(/{[^}]*}/g, '').replace(/\([^)]*\)/g, '').trim();
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -230,9 +330,10 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
         error: 'Server nicht erreichbar. Bitte prüfe deine Internetverbindung oder versuche es später erneut.'
       };
     } else {
+      console.error('Error analyzing PGN, but no specific error message provided.');
       return { 
         ok: false,
-        error: `Fehler bei der Cache-Prüfung: ${outerError instanceof Error ? outerError.message : String(outerError)}` 
+        error: 'Unbekannter Fehler bei der Cache-Prüfung.'
       };
     }
   }
@@ -248,15 +349,6 @@ async function performAnalysis(pgn: string, locale?: string) {
   
   try {
     console.log('Preparing to send analysis request...');
-    
-    // Für Debugging: Fallback-Daten falls API-Aufruf fehlschlägt
-    const mockResponse = {
-      success: true,
-      data: {
-        summary: 'Dies ist eine Notfall-Fallback-Analyse, da der Analyse-API-Aufruf nicht funktioniert.',
-        moments: []
-      }
-    };
     
     try {
       console.log('Sending fetch request for analysis to:', ANALYZE_ENDPOINT);
@@ -292,8 +384,6 @@ async function performAnalysis(pgn: string, locale?: string) {
         console.error('Error parsing analysis response JSON:', e);
         throw e;
       });
-      
-      // Debug-Logs wurden entfernt
       
       // Error handling: If backend returned ok: false, surface error and set success: false
       if (result && result.ok === false) {
