@@ -27,24 +27,31 @@ function localizeHtml(): void {
 function updateUsageDisplay(data: UsageResponse, usageDisplayElement: HTMLElement, limitReachedElement: HTMLElement, statusDivElement: HTMLElement, googleLoginBtnElement: HTMLButtonElement, user: User | null): void {
   console.log('[DEBUG] updateUsageDisplay called with data:', data, 'User:', user);
 
-  // Hide all potentially conflicting sections initially, then show the correct one.
-  statusDivElement.style.display = 'none';       // Contains usageDisplayElement
-  limitReachedElement.style.display = 'none';    // Contains "Bitte melde dich an" text
-  // googleLoginBtnElement.style.display = 'none'; // Button visibility handled in specific blocks
+  // Hide all potentially conflicting sections initially
+  statusDivElement.style.display = 'none';
+  limitReachedElement.style.display = 'none';
 
-  if (data.developmentMode) {
-    googleLoginBtnElement.style.display = 'none'; // Hide button in dev mode message display
-    usageDisplayElement.textContent = data.message || i18next.t('popup.devModeMessage');
-    usageDisplayElement.style.color = '#888';
-    statusDivElement.style.display = 'block'; // Ensure status div is visible
-    limitReachedElement.style.display = 'none';
-    console.log('[DEBUG] updateUsageDisplay: Development mode detected.');
-    return;
+  // Handle Google Login Button visibility based on user state FIRST
+  if (user) {
+    googleLoginBtnElement.style.display = 'none';
+  } else {
+    googleLoginBtnElement.style.display = 'block'; // Show if no user, regardless of dev mode initially
   }
 
-  if (user) { // User is logged in
-    googleLoginBtnElement.style.display = 'none'; // Hide button when user is logged in
-    // Show usage info for logged-in user.
+  if (data.developmentMode) {
+    // If in development mode, always show the dev mode message.
+    // The login button visibility is already set based on 'user' status.
+    usageDisplayElement.textContent = data.message || i18next.t('popup.devModeMessage');
+    usageDisplayElement.style.color = '#888';
+    statusDivElement.style.display = 'block'; // Ensure status div (containing usageDisplay) is visible
+    limitReachedElement.style.display = 'none'; // Ensure limit reached message is hidden
+    console.log('[DEBUG] updateUsageDisplay: Development mode detected. Login button visibility depends on user state.');
+    return; // Dev mode message takes precedence over other displays
+  }
+
+  // Proceed with normal display logic if not in development mode
+  if (user) { // User is logged in (and not in dev mode)
+    // Login button is already hidden by the block above
     statusDivElement.style.display = 'block';
     usageDisplayElement.style.display = 'block';
     if (data.ok && data.usage) {

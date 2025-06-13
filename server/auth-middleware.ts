@@ -2,6 +2,7 @@
 // Stellt sicher, dass nur autorisierte Clients auf die API zugreifen können
 
 import { env } from "bun";
+import { Context } from 'hono';
 
 // API-Key aus der Umgebungsvariable lesen
 const API_KEY = env.CHESS_GPT_API_KEY || 'default-dev-key-change-in-production';
@@ -19,34 +20,20 @@ if (!env.CHESS_GPT_API_KEY) {
 
 // Middleware zur Validierung des API-Keys
 export function apiKeyAuth() {
-  return async (c: any, next: () => Promise<void>) => {
+  return async (c: Context, next: () => Promise<void>) => {
     const path = c.req.path;
     console.log(`[AUTH] Validating API key for request to: ${path}`);
     
-    // API-Key aus dem Authorization-Header extrahieren
-    const authHeader = c.req.header('Authorization');
-    console.log(`[AUTH] Authorization header present: ${!!authHeader}`);
-    
-    if (!authHeader) {
-      console.log('[AUTH] Request rejected: No Authorization header');
-      return c.json(
-        { error: 'Unauthorized: Missing API key' },
-        401
-      );
-    }
-    
-    const apiKey = authHeader.startsWith('Bearer ') 
-      ? authHeader.substring(7).trim() 
-      : null;
-    
-    console.log(`[AUTH] API key extracted: ${!!apiKey}`);
+    // API-Key aus dem X-Api-Key-Header extrahieren
+    const apiKey = c.req.header('X-Api-Key');
+    console.log(`[AUTH] X-Api-Key header present: ${!!apiKey}`);
+    console.log(`[AUTH] Extracted key from X-Api-Key: ${apiKey ? apiKey.substring(0, 4) + '...' : 'null'}`);
     console.log(`[AUTH] Extracted key length: ${apiKey?.length || 0} characters`);
-    
-    // Prüfen, ob der API-Key gültig ist
+
     if (!apiKey) {
-      console.log('[AUTH] Request rejected: Invalid Bearer format');
+      console.log('[AUTH] Request rejected: No X-Api-Key header or key is empty');
       return c.json(
-        { error: 'Unauthorized: Invalid API key format' },
+        { error: 'Unauthorized: Missing API key in X-Api-Key header' },
         401
       );
     }

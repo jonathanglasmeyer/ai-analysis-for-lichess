@@ -15,6 +15,31 @@ if (supabase) {
 const CACHE_CHECK_ENDPOINT = `${SERVER_URL}/check-cache`;
 const ANALYZE_ENDPOINT = `${SERVER_URL}/analyze`;
 
+// Hilfsfunktion zum Erstellen der API-Header
+async function getApiHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Api-Key': CHESS_GPT_API_KEY // Immer den API-Key senden
+  };
+
+  if (supabase) {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.warn('[BACKGROUND] Error getting session for API headers:', sessionError.message);
+      } else if (session && session.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`; // JWT, wenn verfügbar
+        console.log('[BACKGROUND] Added Supabase JWT to Authorization header.');
+      } else {
+        console.log('[BACKGROUND] No active Supabase session or access token for Authorization header.');
+      }
+    } catch (e) {
+      console.error('[BACKGROUND] Exception while trying to get Supabase session for headers:', e);
+    }
+  }
+  return headers;
+}
+
 // Message handling
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Background script received message:', message);
@@ -25,11 +50,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[LOCALE] Cache check with locale:', message.locale);
     
     fetchCacheStatus(message.pgn, message.locale)
-      .then((result: any) => {
+      .then((result: Record<string, unknown> | { ok: boolean; error?: string }) => { // TODO: Define a more specific type for cache status result
         console.log('Cache check result:', result);
         sendResponse(result);
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         console.error('Error during cache check:', error);
         if (error instanceof Error && error.name === 'AbortError') {
           sendResponse({ 
@@ -39,7 +64,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else {
           sendResponse({ 
             ok: false, 
-            error: 'Fehler bei der Cache-Prüfung: ' + (error?.message || String(error)) 
+            error: 'Fehler bei der Cache-Prüfung: ' + (error instanceof Error ? error.message : String(error)) 
           });
         }
       });
@@ -161,30 +186,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const sendResponseSafe = sendResponse;
     
     performAnalysis(message.pgn, message.locale)
-      .then((result: any) => {
+      .then((result: Record<string, unknown> | { success: boolean; data?: Record<string, unknown>; error?: string }) => { // TODO: Define a more specific type for analysis result
         console.log('Analysis result (raw):', JSON.stringify(result));
         
         // Stelle sicher, dass die Antwort konsistent ist
-        const response: any = {
+        const response: { success: boolean; data: Record<string, unknown>; error?: string } = {
           success: true,
-          ...result
+          data: { ...(result.data || result) }, // Versuche, result.data zu nehmen, ansonsten result selbst
         };
-        
-        // Immer alles in data kapseln, falls nicht vorhanden
-        if (!response.data) {
-          response.data = {};
-        }
-        
-        // Kopiere alle relevanten Felder in data, falls sie an der Wurzel liegen
-        for (const key of ['summary', 'moments', 'ok', 'error', 'details']) {
-          if (typeof response[key] !== 'undefined') {
-            response.data[key] = response[key];
-            delete response[key];
+
+        if (typeof result.success === 'boolean') response.success = result.success;
+        if (result.error && typeof result.error === 'string') response.error = result.error;
+
+        // Entferne redundante Felder von der obersten Ebene, wenn sie in data sind
+        if (response.data.success) delete response.data.success;
+        if (response.data.error) delete response.data.error;
+
+        // Kopiere alle relevanten Felder in data, falls sie an der Wurzel liegen und noch nicht in data sind
+        for (const key of ['summary', 'moments', 'ok', 'details']) {
+          if (typeof (result as Record<string,unknown>)[key] !== 'undefined' && typeof response.data[key] === 'undefined') {
+            response.data[key] = (result as Record<string,unknown>)[key];
           }
         }
         
-        // Stelle sicher, dass ok: true im data-Objekt ist
-        if (response.data && !('ok' in response.data)) {
+        // Stelle sicher, dass ok: true im data-Objekt ist, wenn success true ist und kein explizites ok:false da ist
+        if (response.success && response.data && typeof response.data.ok === 'undefined') {
           response.data.ok = true;
         }
         
@@ -195,7 +221,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           console.error('Error sending response to content script:', sendError);
         }
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         console.error('Error analyzing PGN:', error);
         console.error('Error type:', error instanceof Error ? error.constructor.name : typeof error);
         console.error('Error details:', error instanceof Error ? error.message : String(error));
@@ -236,12 +262,10 @@ async function fetchUsageData() {
   console.log('Background: Fetching usage data from', usageUrl);
   
   try {
+    const headers = await getApiHeaders();
     const response = await fetch(usageUrl, {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
-      }
+      headers: headers
     });
 
     if (!response.ok) {
@@ -281,10 +305,7 @@ async function fetchCacheStatus(pgn: string, locale?: string) {
       console.log('Sending cache check request to server...');
       const response = await fetch(`${CACHE_CHECK_ENDPOINT}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
-        },
+        headers: await getApiHeaders(),
         body: JSON.stringify({ 
           pgn: normalizedPgn,
           locale: locale
@@ -359,10 +380,7 @@ async function performAnalysis(pgn: string, locale?: string) {
       
       const response = await fetch(ANALYZE_ENDPOINT, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${CHESS_GPT_API_KEY}`
-        },
+        headers: await getApiHeaders(),
         body: JSON.stringify({ pgn, locale }),
         signal: controller.signal,
         // Konsistent mit dem Popup für CORS-Handling

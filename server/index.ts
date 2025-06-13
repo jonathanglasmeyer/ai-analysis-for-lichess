@@ -10,6 +10,8 @@ import { getClientIp, hashIp } from './src/utils/ip-utils';
 import { getUsage, directUpdateUsage, UserUsageRow } from './src/supabaseClient';
 import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES } from './src/config';
 import { apiKeyAuth } from './auth-middleware';
+import { createMiddleware } from 'hono/factory'; // Für die Middleware-Erstellung
+import { supabase } from './src/supabaseClient';   // Supabase Client für die Authentifizierung
 import { Chess } from 'chess.js';
 
 // Types
@@ -57,6 +59,36 @@ const CACHE_EXPIRY = 30 * 24 * 60 * 60 * 1000; // 30 Tage in Millisekunden
 
 // Initialize server components (cache and database) on startup
 initializeServer();
+
+// JWT Authentication Middleware
+const jwtAuthMiddleware = createMiddleware(async (c, next) => {
+  const authHeader = c.req.header('Authorization');
+  let user = null;
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7); // Entferne "Bearer "
+    console.log('[AUTH_DEBUG] Token to verify with Supabase:', token); // Log den Token
+    try {
+      const { data: userData, error: authError } = await supabase.auth.getUser(token);
+      if (authError) {
+        if (authError.message.includes('token expired')) {
+          console.log('[AUTH] JWT token expired.');
+        } else {
+          console.warn('[AUTH] Error validating token with Supabase:', authError.message);
+        }
+      } else if (userData && userData.user) {
+        user = userData.user;
+        console.log(`[AUTH] User ${user.id} authenticated via JWT for path: ${c.req.path}`);
+      }
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      console.error('[AUTH] Exception during token validation:', errorMessage);
+    }
+  }
+  c.set('user', user); // user ist entweder das User-Objekt oder null
+  await next();
+});
+
 
 async function initializeServer() {
   await initializeCache(); // Initialize file system cache
@@ -448,13 +480,18 @@ app.use('*', cors({
   // credentials: true, // Temporarily removed for debugging
 }));
 
+// Global API Key Authentication, vor JWT Auth, damit User-Objekt nicht überschrieben wird, falls beide Keys da sind
+app.use('*', apiKeyAuth()); 
+// JWT Auth Middleware für alle Routen
+app.use('*', jwtAuthMiddleware);
+
 // Health check endpoint
 app.get('/', (c) => {
   return c.json({ status: 'ok', message: 'Chess-GPT API is running' });
 });
 
 // Cache-Check Endpoint
-app.post('/check-cache', apiKeyAuth(), async (c) => {
+app.post('/check-cache', async (c) => {
   try {
     const body = await c.req.json<CheckCacheRequest>();
     console.log('[LOCALE] Cache check received locale:', body.locale);
@@ -520,7 +557,7 @@ app.post('/check-cache', apiKeyAuth(), async (c) => {
 
 // Analyze endpoint
 // Endpoint to get current usage status
-app.get('/usage', apiKeyAuth(), async (c) => {
+app.get('/usage', async (c) => {
   try {
     let clientIp = getClientIp(c.req.raw);
     const isProduction = env.NODE_ENV === 'production';
@@ -584,7 +621,7 @@ app.get('/usage', apiKeyAuth(), async (c) => {
   }
 });
 
-app.post('/analyze', apiKeyAuth(), analyzeLimiter.middleware(), async (c) => {
+app.post('/analyze', analyzeLimiter.middleware(), async (c) => {
   try {
     // Extract and hash the client IP to create a unique user key for tracking usage
     const clientIp = getClientIp(c.req.raw);

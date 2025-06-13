@@ -5,7 +5,7 @@
 // Definiert, ob die Extension im Produktionsmodus gebaut wird.
 // Dieser Wert wird durch den Rollup-Build-Prozess (mittels @rollup/plugin-replace)
 // basierend auf der NODE_ENV Umgebungsvariable gesetzt.
-const IS_PRODUCTION_BUILD = process.env.NODE_ENV === 'production';
+const IS_PRODUCTION_BUILD = (process.env.NODE_ENV as string) === 'production';
 
 // Domain für den Produktionsserver
 export const HETZNER_DOMAIN = 'chess-analysis-api.quietloop.dev';
