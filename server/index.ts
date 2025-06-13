@@ -7,8 +7,9 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { RateLimiter } from './rate-limiter';
 import { getClientIp, hashIp } from './src/utils/ip-utils';
-import { getUsage, directUpdateUsage, UserUsageRow } from './src/supabaseClient';
-import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES } from './src/config';
+import { getUsage, directUpdateUsage } from './src/supabaseClient'; // UserUsageRow entfernt
+import { IP_HASHING_SALT, MAX_ANONYMOUS_ANALYSES, MAX_AUTHENTICATED_ANALYSES } from './src/config';
+import type { User } from '@supabase/supabase-js'; // Import User type
 import { apiKeyAuth } from './auth-middleware';
 import { createMiddleware } from 'hono/factory'; // Für die Middleware-Erstellung
 import { supabase } from './src/supabaseClient';   // Supabase Client für die Authentifizierung
@@ -554,67 +555,67 @@ app.post('/check-cache', async (c) => {
     return c.json({ inCache: false, error: 'Invalid request' }, 400);
   }
 });
-
-// Analyze endpoint
 // Endpoint to get current usage status
 app.get('/usage', async (c) => {
   try {
-    let clientIp = getClientIp(c.req.raw);
-    const isProduction = env.NODE_ENV === 'production';
+    const authenticatedUser = c.get('user') as User | null;
+    let userKeyForUsage: string;
+    let isAnonymousUsage = true;
 
-    let isDevFallbackIp = false;
-    if (!clientIp && !isProduction) {
-      // In development, if no IP is found (e.g. direct localhost call without proxy), use a fallback.
-      clientIp = 'dev-fallback-ip'; 
-      isDevFallbackIp = true;
-      console.log('[USAGE] No client IP found in development, using fallback:', clientIp);
+    if (authenticatedUser && authenticatedUser.id) {
+      userKeyForUsage = authenticatedUser.id;
+      isAnonymousUsage = false;
+      console.log(`[USAGE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check.`);
+    } else {
+      let clientIp = getClientIp(c.req.raw);
+      const isProduction = env.NODE_ENV === 'production';
+
+      if (!isProduction && (!clientIp || clientIp === '::1' || clientIp === '127.0.0.1')) {
+        clientIp = 'dev-fallback-ip';
+        console.log('[USAGE] Development mode (anonymous): Using fallback IP for usage check.');
+      }
+
+      if (!clientIp) {
+        console.warn('[USAGE] Anonymous user: Client IP could not be determined.');
+        return c.json({ ok: false, error: 'Client IP could not be determined for anonymous user.' }, 400);
+      }
+
+      const ipHash = hashIp(clientIp, IP_HASHING_SALT);
+      userKeyForUsage = ipHash;
+
+      if (!isProduction && userKeyForUsage === hashIp('dev-fallback-ip', IP_HASHING_SALT)) {
+        console.log('[USAGE] Development mode with fallback IP (anonymous): Usage tracking effectively disabled.');
+        return c.json({
+          ok: true,
+          developmentMode: true,
+          usage: { current: 0, limit: 0 },
+          message: "Usage tracking is effectively disabled in development when a real client IP cannot be determined."
+        });
+      }
+      console.log(`[USAGE] Anonymous user. Using IP Hash for usage check: ${userKeyForUsage.substring(0, 8)}...`);
     }
 
-    // Special response if in development mode and using the fallback IP
-    if (!isProduction && isDevFallbackIp) {
-      console.log('[USAGE] Development mode with fallback IP. Reporting usage tracking as effectively disabled.');
+    const usageData = await getUsage(userKeyForUsage);
+
+    if (usageData) {
       return c.json({
         ok: true,
-        developmentMode: true, // Flag for the frontend
-        usage: { current: 0, limit: 0 }, // Dummy-values
-        message: "Usage tracking is effectively disabled in development when a real client IP cannot be determined."
+        usage: {
+          current: usageData.analysis_count,
+          limit: isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES
+        }
+      });
+    } else {
+      // User not found (getUsage returned null), means usage is 0 (new user)
+      console.log(`[USAGE] No usage data found for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0,8)}..., assuming new user.`);
+      return c.json({
+        ok: true,
+        usage: {
+          current: 0,
+          limit: isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES
+        }
       });
     }
-
-    // Ensure IP_HASHING_SALT is available
-    if (!IP_HASHING_SALT) {
-      console.error('[USAGE] IP_HASHING_SALT is not configured. Cannot proceed with usage tracking.');
-      return c.json({ ok: false, error: "Server configuration error: IP_HASHING_SALT is missing.", errorCode: "SERVER_CONFIG_ERROR" }, 500);
-    }
-
-    const hashedIp = hashIp(clientIp!, IP_HASHING_SALT); // clientIp is guaranteed to be non-null here
-    console.log(`[USAGE] Hashed IP (prefix): ${hashedIp.substring(0,8)}... for original IP (prefix): ${clientIp.substring(0,3)}...`);
-
-    let currentUsage = 0;
-    try {
-      const usageData: UserUsageRow | null = await getUsage(hashedIp);
-
-      if (usageData) {
-        currentUsage = usageData.analysis_count;
-      } else {
-        // User not found (getUsage returned null), means usage is 0 (new user)
-        console.log(`[USAGE] No usage data found for hashed IP (prefix): ${hashedIp.substring(0,8)}..., assuming new user.`);
-        currentUsage = 0; // Explicitly set to 0, though it's already the default
-      }
-    } catch (dbError) {
-      // This catch block now specifically handles errors thrown by getUsage (actual DB errors)
-      console.error('[USAGE] Supabase error fetching usage:', dbError);
-      return c.json({ ok: false, error: 'Failed to fetch usage data due to a database error.', errorCode: 'USAGE_FETCH_FAILED_DB' }, 500);
-    }
-
-    return c.json({
-      ok: true,
-      usage: {
-        current: currentUsage,
-        limit: MAX_ANONYMOUS_ANALYSES,
-      },
-    });
-
   } catch (error) {
     console.error('[USAGE] Unexpected error in /usage handler:', error);
     return c.json({ ok: false, error: 'An unexpected error occurred', errorCode: 'USAGE_UNEXPECTED_ERROR' }, 500);
@@ -623,59 +624,49 @@ app.get('/usage', async (c) => {
 
 app.post('/analyze', analyzeLimiter.middleware(), async (c) => {
   try {
-    // Extract and hash the client IP to create a unique user key for tracking usage
-    const clientIp = getClientIp(c.req.raw);
-    
-    // For local development or testing, provide a default IP if none is found
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    
-    if (!clientIp && !isDevelopment) {
-      // In production, we require a valid client IP
-      console.error('[ANALYZE] No client IP could be determined');
-      return c.json({ 
-        ok: false, 
-        error: 'Could not determine client IP. Please ensure your request includes appropriate headers.' 
-      }, 400);
+    const authenticatedUser = c.get('user') as User | null;
+    let userKeyForUsage: string;
+    let isAnonymousUsage = true;
+    let shouldTrackThisRequest = true; // Standardmäßig wird getrackt
+
+    if (authenticatedUser && authenticatedUser.id) {
+      userKeyForUsage = authenticatedUser.id;
+      isAnonymousUsage = false;
+      console.log(`[ANALYZE] Authenticated user: ${authenticatedUser.id}. Using user ID for usage check.`);
+    } else {
+      const clientIp = getClientIp(c.req.raw);
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+
+      if (!clientIp && !isDevelopment) {
+        console.error('[ANALYZE] No client IP could be determined in production for anonymous user.');
+        return c.json({ ok: false, error: 'Could not determine client IP.' }, 400);
+      }
+
+      const effectiveIp = clientIp || '127.0.0.1'; // Fallback für lokales Development
+      userKeyForUsage = hashIp(effectiveIp, IP_HASHING_SALT || '');
+      console.log(`[ANALYZE] Anonymous user. Using IP: ${clientIp ? 'Real client IP' : 'Development fallback IP'}. Hashed IP: ${userKeyForUsage.substring(0, 8)}...`);
+
+      // Im Development-Modus mit Fallback-IP das Tracking für DIESE Anfrage deaktivieren
+      if (isDevelopment && (effectiveIp === '127.0.0.1' || effectiveIp === 'dev-fallback-ip')) {
+        shouldTrackThisRequest = false;
+        console.log('[ANALYZE] Development mode with fallback IP detected, skipping usage tracking for this request.');
+      }
     }
     
-    // Use a placeholder IP for local development if no real IP is detected
-    const effectiveIp = clientIp || '127.0.0.1';
-    console.log(`[ANALYZE] Using IP: ${clientIp ? 'Real client IP' : 'Development fallback IP'}`);
-    
-    // Determine if usage should be tracked for this request
-    // Skip tracking for development fallback IP (127.0.0.1) in development mode
-    const shouldTrackUsage = !(isDevelopment && effectiveIp === '127.0.0.1');
-    
-    if (!shouldTrackUsage) {
-      console.log('[ANALYZE] Development mode with fallback IP detected, skipping usage tracking');
-    }
-    
-    // Create a salted hash of the IP for anonymous tracking
-    let userKey;
-    try {
-      userKey = hashIp(effectiveIp, IP_HASHING_SALT || '');
-      console.log(`[ANALYZE] Request from hashed IP: ${userKey.substring(0, 8)}...`);
-    } catch (hashError) {
-      console.error('[ANALYZE] Failed to hash client IP:', hashError);
-      return c.json({ 
-        ok: false, 
-        error: 'Internal server error processing client identifier.' 
-      }, 500);
-    }
-    
-    // Fetch the current usage for this user from Supabase, if tracking is enabled
-    if (shouldTrackUsage) {
+    // Fetch the current usage for this user from Supabase, if tracking is enabled for this request
+    if (shouldTrackThisRequest) {
+      // userKeyForUsage and isAnonymousUsage are already defined in the outer scope
       try {
-        const usage = await getUsage(userKey);
-        if (usage && usage.analysis_count >= MAX_ANONYMOUS_ANALYSES) {
-          console.log(`[ANALYZE] User ${userKey.substring(0,8)}... has reached the analysis limit.`);
+        const usage = await getUsage(userKeyForUsage);
+        if (usage && usage.analysis_count >= (isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES)) {
+          console.log(`[ANALYZE] User ${userKeyForUsage.substring(0,8)}... has reached the analysis limit.`);
           return c.json({
             ok: false,
-            error: `You have reached the limit of ${MAX_ANONYMOUS_ANALYSES} free analyses. Please create an account for unlimited analyses.`,
+            error: `You have reached the limit of ${(isAnonymousUsage ? MAX_ANONYMOUS_ANALYSES : MAX_AUTHENTICATED_ANALYSES)} free analyses. Please create an account for unlimited analyses.`,
             errorCode: 'USAGE_LIMIT_EXCEEDED'
           }, 429); // Too Many Requests
         }
-        console.log(`[ANALYZE] Current usage for ${userKey.substring(0,8)}...: ${usage?.analysis_count || 0} analyses`);
+        console.log(`[ANALYZE] Current usage for ${userKeyForUsage.substring(0,8)}...: ${usage?.analysis_count || 0} analyses`);
       } catch (dbError) {
         console.error('[ANALYZE] Failed to fetch usage data, proceeding without usage check:', dbError);
         // Graceful degradation: If DB is down, allow analysis but log the error.
@@ -909,44 +900,35 @@ ${normalizedPgn}`;
       
       // Logging
       console.log(`Saved analysis to filesystem cache`);
-      
-      // Increment usage count for this user after successful analysis, if tracking is enabled
-      if (shouldTrackUsage) {
+
+      // Increment usage count for this user after successful analysis, if tracking is enabled for this request
+      if (shouldTrackThisRequest) {
         try {
-          console.log(`[ANALYZE] Attempting to increment usage for user_key: ${userKey.substring(0, 8)}...`);
-          const updateResult = await directUpdateUsage(userKey, true); // true indicates anonymous user
+          // userKeyForUsage und isAnonymousUsage sind bereits korrekt gesetzt
+          const updateResult = await directUpdateUsage(userKeyForUsage, isAnonymousUsage);
           if (updateResult.error) {
-            console.error('[ANALYZE] Failed to increment usage count:', updateResult.error);
-            // In Entwicklung können wir trotzdem fortfahren - für Debugging-Zwecke
-            const errorCode = updateResult.error.code || 'unknown';
-            console.log(`[ANALYZE] Increment error code: ${errorCode}`);
-            
-            // Füge nur in der Entwicklung Debug-Informationen hinzu
-            if (isDevelopment) {
-              console.log(`[DEBUG] This is likely a SQL error in the Supabase stored procedure. ` +
-                `Check if column "user_key" is properly qualified in the function.`);
-            }
+            console.error(`[ANALYZE] Failed to update usage for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0, 8)}...:`, updateResult.error);
+            // Nicht-kritischer Fehler, Analyse trotzdem zurückgeben
           } else {
-            console.log(`[ANALYZE] Usage count updated: ${updateResult.data?.analysis_count || 'unknown'} analyses used`);
+            console.log(`[ANALYZE] Usage updated successfully for ${isAnonymousUsage ? 'IP Hash' : 'user ID'} ${userKeyForUsage.substring(0, 8)}...`);
           }
         } catch (incrementError) {
           console.error('[ANALYZE] Error incrementing usage:', incrementError);
-          // Continue despite error - we don't want to block returning the analysis results
+          // Nicht-kritischer Fehler, Analyse trotzdem zurückgeben
         }
       }
-      
       return c.json(response);
-    } catch (anthropicError) {
-      console.error('Anthropic API error:', anthropicError);
+    } catch (anthropicOrCacheError) {
+      console.error('Anthropic API or Caching error:', anthropicOrCacheError);
       return c.json({
         ok: false, 
-        error: 'Error analyzing game with Anthropic API',
-        details: anthropicError instanceof Error ? anthropicError.message : 'Unknown error'
+        error: 'Error analyzing game with Anthropic API or during caching',
+        details: anthropicOrCacheError instanceof Error ? anthropicOrCacheError.message : 'Unknown error'
       }, 500);
     }
-  } catch (error) {
-    console.error('Error processing request:', error);
-    return c.json({ ok: false, error: 'Invalid request' }, 400);
+  } catch (error) { // This is the outer catch for the entire /analyze endpoint
+    console.error('Error processing /analyze request:', error);
+    return c.json({ ok: false, error: 'Invalid request or unexpected error' }, 400);
   }
 });
 
