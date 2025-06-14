@@ -50,16 +50,18 @@ popup.limitReachedMessage Nicht übersetzt.
 - [ ]  Reddit, lichess forums
 - [ ]  Website
 
+
+### Popup
+- [ ]  Better pop-up UX & UI
+- [ ]  Show remaining credits and overall performed analyses 
+
+### Login / Token Transfer
+- [ ]  Handle a case where I did a migration once and then I'm logging in from another computer. Ensure that the tokens from this anonymous account don't override the tokens stored for the user account. If a migration happened at one point, they will not be the second migration. 
+
 ### Technical/Quality
 - [ ]  Generate list of manual test cases
 - [ ]  Start automating them iteratively. 
 
-### Popup
-- [ ]  Invertiere die Analyse-Anzeige, indem du noch verfügbare Analysen anzeigst. 
-- [ ]  Better pop-up UX & UI
-
-### Login / Token Transfer
-- [ ]  Handle a case where I did a migration once and then I'm logging in from another computer. Ensure that the tokens from this anonymous account don't override the tokens stored for the user account. If a migration happened at one point, they will not be the second migration. 
 
 # Post-MVP Ideas
 - [ ]  Customizing prompt, Prompt Presets

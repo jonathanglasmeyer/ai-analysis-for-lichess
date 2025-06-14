@@ -15,6 +15,7 @@ export interface UserUsageRow {
   user_key: string;
   is_anonymous: boolean;
   analysis_count: number;
+  credits: number;
   first_analysis_timestamp: string;
   last_analysis_timestamp: string;
 }
@@ -94,6 +95,7 @@ export async function directUpdateUsage(
       .from('user_usage')
       .update({
         analysis_count: (existingData.analysis_count || 0) + 1,
+        credits: (existingData.credits || 0) - 1, // Decrement credits
         last_analysis_timestamp: now
       })
       .eq('user_key', userKey)
@@ -103,12 +105,16 @@ export async function directUpdateUsage(
     return { data, error };
   } else {
     // Insert new record
+    // Insert new record
+    // Assuming default credits are 10, and one is consumed now.
+    const initialCredits = 10;
     const { data, error } = await supabase
       .from('user_usage')
       .insert({
         user_key: userKey,
         is_anonymous: isAnonymous,
         analysis_count: 1,
+        credits: initialCredits - 1, // Set initial credits minus one consumed
         first_analysis_timestamp: now,
         last_analysis_timestamp: now
       })
@@ -165,6 +171,7 @@ export async function ensureUserUsageRecordExists(userKey: string, isAnonymous: 
         user_key: userKey,
         is_anonymous: isAnonymous,
         analysis_count: 0, // Initialize with 0 analyses
+        credits: 10, // Explicitly set default credits
         first_analysis_timestamp: now,
         last_analysis_timestamp: now,
       })
